@@ -10,6 +10,10 @@ Data stays on the device and syncs through the user's own iCloud. The app is bui
 
 _Last updated: 2026-10-12_
 
+> **Status:** v1.0.0 and **v1.1.0 are released** on `main`. The app runs on the owner's iPhone through
+> the free **Personal** build (no paid Apple Developer Program yet, so iCloud sync, TestFlight and the
+> App Store are on hold). Real-ride field testing is in progress.
+
 ---
 
 ## 1. Core idea
@@ -59,7 +63,7 @@ turn-by-turn navigation, and crash detection.
 
 ## 3. Feature scope
 
-### v1.0 — MVP
+### v1.0.0 — MVP (released)
 
 **A. Spots (core)**
 - **Mark a spot while riding** without unlocking or looking at the phone for long:
@@ -135,7 +139,18 @@ turn-by-turn navigation, and crash detection.
 **G. iCloud sync and export:** spots (including the wishlist), rides and links sync across your
 devices. Spots can be exported as GPX or KML, which **imports into Google My Maps**.
 
-### v1.1
+### v1.1.0 (released)
+- **Share photos and videos** from a ride or spot to any app (WhatsApp, Instagram, Messages, AirDrop,
+  Files…) as original full-quality files: from the full-screen viewer, by long-pressing a thumbnail,
+  or with **Share all**. **Open Photos** jumps to the Photos app (iOS can't open it at a specific
+  item).
+- **Ride soundtrack:** songs played in the **Music app** for 30+ seconds during a ride are logged with
+  time and place. A 🎵 Soundtrack list in ride detail and the summary opens songs in Apple Music, and
+  the list can be shared. Other apps (Spotify, …) can't be read by iOS apps. There's a Settings toggle.
+- **Free iPhone testing:** a Personal build without iCloud plus `scripts/run-on-iphone.sh`, so the app
+  runs on your own iPhone with a free Apple ID (reinstall every 7 days).
+
+### Next (ideas, not scheduled)
 - **Trips:** group several rides (for example "Ladakh 2026") with a combined map, spots and media,
   and an album per trip, with ride albums nested inside its folder.
 - **Home Screen widgets:** "Mark spot" and "Last spot".
@@ -255,6 +270,10 @@ redirect first). We keep the URL exactly as pasted, plus a normalised coordinate
 (`PHPhotoLibrary.localIdentifierMappings(for:)`). This means that with iCloud Photos enabled, a spot's
 photos also appear on your iPad.
 
+**Schema versions:** v1.0.0 is `RideTrackerSchemaV1` (frozen as nested copies of its models).
+v1.1.0 is `RideTrackerSchemaV2`, which adds `PlayedSong` (title, artist, album, Apple Music ID, start
+time, seconds listened, where it started) and `Ride.songs`, with a lightweight migration from V1.
+
 ---
 
 ## 5. Permissions and Info.plist
@@ -263,7 +282,8 @@ photos also appear on your iPad.
 |---|---|---|
 | Location — When In Use | "Ride Tracker uses your location to record your route and save the spots you mark while riding." | Plus the background mode "Location updates" |
 | Photos — **Full access** | "Ride Tracker reads the location and time of your photos and videos to organise them by the spots and rides where you took them." | With *Limited* access, auto-matching only sees the selected items. The UI explains this and still works. |
-| Motion | — | v1.1 only (lean angle) |
+| Apple Music | "Ride Tracker keeps a list of the songs you play in the Music app during a ride, so you can see and replay each ride's soundtrack." | v1.1.0. Asked at the first ride start; can be turned off in Settings |
+| Motion | — | Future (lean angle) |
 
 Other requirements:
 - `LSApplicationQueriesSchemes`: `comgooglemaps` (to open the Google Maps app).
@@ -309,6 +329,11 @@ Other requirements:
 
 Roughly **10–12 weeks** to submission for one developer.
 
+**Status (2026-10-12):** milestones 0–6 are code-complete in v1.0.0 and checked on the simulator and
+the owner's iPhone. Milestone 7's iCloud sync can't be tested until the paid Developer Program is
+joined. Milestone 8 is happening on the owner's iPhone with the free Personal build instead of
+TestFlight. Milestone 9 hasn't started.
+
 ---
 
 ## 8. Testing
@@ -321,6 +346,8 @@ Roughly **10–12 weeks** to submission for one developer.
 - **Device:** real rides. Mark spots from the Lock Screen, take photos at the spots and check they
   attach correctly, and confirm every photo and video from the ride is in its Photos album, including
   ones taken with the phone locked and from other camera apps. Then force-quit mid-ride and check recovery.
+- **Migrations:** every schema version needs a test that writes a store with the previous version
+  and opens it with the new one (`RideTrackerTests/MigrationTests.swift`).
 - **Sync:** two devices on the same Apple ID with iCloud Photos on. Check that spots and their photos
   appear on both.
 
@@ -328,12 +355,13 @@ Roughly **10–12 weeks** to submission for one developer.
 
 ## 9. Prerequisites (action needed from you)
 
-- [ ] **Install Xcode 26.** It isn't installed yet (only the Command Line Tools are). Then run
+- [x] **Xcode 26** installed (26.6, with the iOS 26.5 simulator). Still to do once:
       `sudo xcode-select -s /Applications/Xcode.app`.
-- [ ] **Apple Developer Program** ($99/yr).
-- [ ] App name and bundle ID.
+- [x] App name and bundle ID: **Ride Tracker**, `com.hatchedland.ridetracker`.
+- [x] An iPhone for testing (iPhone 16, free Personal Team build).
+- [ ] **Apple Developer Program** ($99/yr). Only needed for iCloud sync, TestFlight and the App Store.
 - [ ] A privacy policy URL before submission.
-- [ ] An iPhone, a phone mount, and a few real rides for testing.
+- [ ] A phone mount and a few real rides for testing.
 
 ---
 
@@ -342,6 +370,10 @@ Roughly **10–12 weeks** to submission for one developer.
 - Spot radius for attaching photos and auto-visit: **150 m** (adjustable in Settings).
 - Rides are **named by you when starting**, and the Photos album uses the same name.
 - No GoPro or action-camera support. The wishlist is in v1. Albums are created automatically for every ride.
+- Testing happens on the owner's iPhone with a **free Apple ID** (Personal build, no iCloud). There's
+  no TestFlight or other testers for now.
+- Shared photos and videos are the **original files**, sent through the system share sheet.
+- The ride soundtrack covers the **Music app only**, songs count after 30 s, and it's on by default.
 
 ## 11. Open questions
 
