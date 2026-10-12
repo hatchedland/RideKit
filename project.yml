@@ -1,0 +1,131 @@
+# XcodeGen project definition. Generate the Xcode project with:  xcodegen generate
+# (RideTracker.xcodeproj is generated, not committed.)
+name: RideTracker
+
+options:
+  bundleIdPrefix: com.hatchedland
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Set your Apple Developer Team ID here (or in Xcode › Signing & Capabilities).
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+
+fileGroups:
+  - TestRoutes
+  - PLAN.md
+  - README.md
+
+packages:
+  RideKit:
+    path: Packages/RideKit
+
+targets:
+  RideTracker:
+    type: application
+    platform: iOS
+    sources:
+      - path: RideTracker
+      - path: Shared
+    dependencies:
+      - package: RideKit
+      - target: RideTrackerWidgets
+        embed: true
+        codeSign: true
+    entitlements:
+      path: RideTracker/Resources/RideTracker.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.hatchedland.ridetracker
+        com.apple.developer.icloud-services:
+          - CloudKit
+        aps-environment: development
+    info:
+      path: RideTracker/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Ride Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - location-services
+          - gps
+        UIBackgroundModes:
+          - location
+          - remote-notification
+        NSSupportsLiveActivities: true
+        NSLocationWhenInUseUsageDescription: >-
+          Ride Tracker uses your location to record your route and to save the spots you mark while
+          riding, each with a Google Maps link.
+        NSPhotoLibraryUsageDescription: >-
+          Ride Tracker puts every photo and video you take during a ride into an album named after the
+          ride, and uses their locations to show them at the spots where you took them.
+        LSApplicationQueriesSchemes:
+          - comgooglemaps
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker
+        INFOPLIST_KEY_CFBundleDisplayName: Ride Tracker
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+
+  RideTrackerWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: RideTrackerWidgets
+      - path: Shared
+    info:
+      path: RideTrackerWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Ride Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+
+  RideTrackerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RideTrackerTests
+    dependencies:
+      - target: RideTracker
+      - package: RideKit
+
+schemes:
+  RideTracker:
+    build:
+      targets:
+        RideTracker: all
+        RideTrackerTests: [test]
+    run:
+      config: Debug
+      simulateLocation:
+        allow: true
+        defaultLocation: TestRoutes/DelhiToMurthal.gpx
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - RideTrackerTests
+        - package: RideKit/RideKitTests
