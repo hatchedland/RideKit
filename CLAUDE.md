@@ -37,6 +37,9 @@ Setup and release checklist: [README.md](README.md).
   App code (`RideTracker/`) maps models to RideKit value types (`SpotReference`, `MediaCandidate`).
 - `Shared/` is compiled into both the app and the widget extension — it must not reference app-only
   types. Intents reach the app through `RideControl` handlers.
+- Build configs: **Debug / Release** use iCloud (`RideTracker.entitlements`). **Personal** (scheme
+  "RideTracker (Personal)", flag `PERSONAL_TEAM`) has no entitlements and local-only SwiftData, for
+  free-Apple-ID device testing. Keep new capabilities out of Personal unless free teams support them.
 - `RideTracker.xcodeproj` is **generated** by XcodeGen from `project.yml` and not committed. Change
   targets, capabilities, Info.plist keys and entitlements in `project.yml`, then `xcodegen generate`.
 
@@ -58,6 +61,7 @@ Setup and release checklist: [README.md](README.md).
 ./scripts/test.sh                       # RideKit unit tests (works with only Command Line Tools)
 xcodegen generate                       # regenerate the Xcode project after editing project.yml
 xcodebuild -scheme RideTracker -destination 'platform=iOS Simulator,name=iPhone 17' test   # needs Xcode
+./scripts/run-on-iphone.sh              # free Personal build (no iCloud) → USB iPhone
 ./scripts/typecheck-without-xcode.sh    # stopgap type-check on the macOS SDK when Xcode isn't installed
 ```
 

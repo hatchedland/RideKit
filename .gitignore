@@ -17,3 +17,6 @@ Package.resolved
 *.env
 *.p12
 *.mobileprovision
+
+# Local signing team for scripts/run-on-iphone.sh
+.team-id

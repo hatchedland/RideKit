@@ -16,12 +16,18 @@ enum RideTrackerMigrationPlan: SchemaMigrationPlan {
 enum Persistence {
     /// Syncs through the user's private iCloud database. Falls back to local-only storage when the
     /// device isn't signed in to iCloud. SwiftData then syncs once it is.
+    /// The Personal build (free Apple ID, no iCloud entitlement) is always local-only.
     static func makeContainer(inMemory: Bool = false) -> ModelContainer {
         let schema = Schema(versionedSchema: RideTrackerSchemaV1.self)
+        #if PERSONAL_TEAM
+        let cloudKit: ModelConfiguration.CloudKitDatabase = .none
+        #else
+        let cloudKit: ModelConfiguration.CloudKitDatabase = inMemory ? .none : .automatic
+        #endif
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: inMemory,
-            cloudKitDatabase: inMemory ? .none : .automatic
+            cloudKitDatabase: cloudKit
         )
         do {
             return try ModelContainer(
