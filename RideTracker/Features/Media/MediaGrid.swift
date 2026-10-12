@@ -6,7 +6,9 @@ import SwiftUI
 struct MediaGrid: View {
     let links: [MediaLink]
     @Environment(RideRecorder.self) private var recorder
+    @Environment(\.openURL) private var openURL
     @State private var selected: MediaLink?
+    @State private var shareRequest: MediaShareRequest?
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: 2)]
 
@@ -18,9 +20,19 @@ struct MediaGrid: View {
                         .aspectRatio(1, contentMode: .fill)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Share…", systemImage: "square.and.arrow.up") {
+                        shareRequest = MediaShareRequest(localIdentifiers: [link.localIdentifier])
+                    }
+                    Button("Open Photos", systemImage: "photo.on.rectangle") { openURL(PhotosApp.url) }
+                } preview: {
+                    AssetThumbnail(localIdentifier: link.localIdentifier, isVideo: link.isVideo)
+                        .frame(width: 300, height: 300)
+                }
             }
         }
         .task { recorder.organizer.resolveLocalIdentifiers(links) }
+        .mediaSharing($shareRequest)
         .fullScreenCover(item: $selected) { link in
             MediaViewer(links: links, initial: link)
         }
@@ -65,7 +77,11 @@ struct MediaViewer: View {
     let links: [MediaLink]
     let initial: MediaLink
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var selection: UUID?
+    @State private var shareRequest: MediaShareRequest?
+
+    private var current: MediaLink? { links.first { $0.id == selection } }
 
     var body: some View {
         NavigationStack {
@@ -87,8 +103,17 @@ struct MediaViewer: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Button("Share", systemImage: "square.and.arrow.up") {
+                        if let current { shareRequest = MediaShareRequest(localIdentifiers: [current.localIdentifier]) }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    Spacer()
+                    Button("Open Photos", systemImage: "photo.on.rectangle") { openURL(PhotosApp.url) }
+                        .labelStyle(.titleAndIcon)
+                }
                 ToolbarItem(placement: .principal) {
-                    if let link = links.first(where: { $0.id == selection }) {
+                    if let link = current {
                         VStack {
                             Text(link.capturedAt.formatted(date: .abbreviated, time: .shortened)).font(.subheadline.bold())
                             if let spot = link.spot { Text(spot.displayName).font(.caption) }
@@ -98,6 +123,7 @@ struct MediaViewer: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .mediaSharing($shareRequest)
             .onAppear { selection = initial.id }
         }
     }
