@@ -73,6 +73,9 @@ targets:
         NSPhotoLibraryUsageDescription: >-
           Ride Tracker puts every photo and video you take during a ride into an album named after the
           ride, and uses their locations to show them at the spots where you took them.
+        NSAppleMusicUsageDescription: >-
+          Ride Tracker keeps a list of the songs you play in the Music app during a ride, so you can
+          see and replay each ride's soundtrack.
         LSApplicationQueriesSchemes:
           - comgooglemaps
         ITSAppUsesNonExemptEncryption: false

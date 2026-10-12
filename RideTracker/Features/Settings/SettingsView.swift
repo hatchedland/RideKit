@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
     @AppStorage(AppSettings.Key.nearbyAlerts) private var nearbyAlerts = true
     @AppStorage(AppSettings.Key.spotRadius) private var spotRadius = MediaPlacer.defaultSpotRadius
+    @AppStorage(AppSettings.Key.trackSongs) private var trackSongs = true
 
     @State private var photoStatus: PHAuthorizationStatus = .notDetermined
     @State private var kmlURL: URL?
@@ -42,6 +43,14 @@ struct SettingsView: View {
                     Text("Photos")
                 } footer: {
                     Text("Each ride gets an album in Photos › Albums › Ride Tracker with everything you shoot between Start and End. Photos within the spot radius are attached to that spot, and a wishlist spot counts as visited if you stop or take a photo within it.")
+                }
+
+                Section {
+                    Toggle("Log songs from Apple Music", isOn: $trackSongs)
+                } header: {
+                    Text("Music")
+                } footer: {
+                    Text("Keeps a soundtrack of each ride: songs you play in the Music app for at least 30 seconds. Other apps like Spotify can't be read by iOS apps.")
                 }
 
                 Section {
