@@ -11,6 +11,7 @@ struct SpotDetailView: View {
     @State private var copied = false
     @State private var confirmingDelete = false
     @State private var landmarkSuggestions: [String] = []
+    @State private var shareRequest: MediaShareRequest?
 
     var body: some View {
         List {
@@ -107,9 +108,20 @@ struct SpotDetailView: View {
             }
 
             if let media = spot.media, !media.isEmpty {
-                Section("Photos & videos (\(media.count))") {
-                    MediaGrid(links: media.sorted { $0.capturedAt < $1.capturedAt })
+                let sorted = media.sorted { $0.capturedAt < $1.capturedAt }
+                Section {
+                    MediaGrid(links: sorted)
                         .listRowInsets(EdgeInsets())
+                } header: {
+                    HStack {
+                        Text("Photos & videos (\(media.count))")
+                        Spacer()
+                        Button("Share all", systemImage: "square.and.arrow.up") {
+                            shareRequest = MediaShareRequest(localIdentifiers: sorted.map(\.localIdentifier))
+                        }
+                        .font(.footnote)
+                        .textCase(nil)
+                    }
                 }
             }
 
@@ -135,6 +147,7 @@ struct SpotDetailView: View {
         .navigationTitle(spot.displayName)
         .toolbarTitleDisplayMode(.inline)
         .navigationDestination(for: Ride.self) { RideDetailView(ride: $0) }
+        .mediaSharing($shareRequest)
         .confirmationDialog("Delete this spot?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 recorder.spots.delete(spot)
