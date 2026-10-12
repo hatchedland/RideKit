@@ -20,6 +20,9 @@ Setup and release checklist: [README.md](README.md).
   from live events. Late arrivals are swept for 48 h. Screenshots excluded by default.
 - **Photos are referenced, never copied** (`PHAsset` local ID + `PHCloudIdentifier`). Deleting a ride
   or spot never deletes photos; deleting an album only on explicit choice.
+- **Sharing** sends the **original** Photos files (edited version if any, Live Photo still) through the
+  system share sheet as file URLs. "Open Photos" can only open the Photos app (no public API to open a
+  specific item) — don't claim otherwise.
 - **Ride soundtrack**: songs played in the **Music app** (Apple Music / own library) for ≥ 30 s during
   a ride are logged with time and place, opened via Apple Music links. Other apps (Spotify, …) are not
   readable by iOS apps — don't promise them. Uses MediaPlayer (no MusicKit entitlement, so it works
@@ -54,10 +57,10 @@ Setup and release checklist: [README.md](README.md).
 
 | Path | Purpose |
 |---|---|
-| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, wishlist matching, ride naming, GPX/KML |
-| `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, versioned schema |
-| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `LiveActivityController`, `AppSettings` |
-| `RideTracker/Features` | SwiftUI screens: Record, Spots, Rides, Media, Settings |
+| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, wishlist matching, ride naming, GPX/KML, song log + Apple Music links |
+| `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1 frozen, V2 current) |
+| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `MusicService`, `LiveActivityController`, `AppSettings` |
+| `RideTracker/Features` | SwiftUI screens: Record, Spots, Rides (incl. `SoundtrackSection`), Media (incl. `MediaSharing`), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents |
 | `TestRoutes` | GPX files for simulator playback |
