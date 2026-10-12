@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Secrets / local config
+*.env
+*.p12
+*.mobileprovision
