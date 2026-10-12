@@ -101,18 +101,19 @@ final class RideRecorder {
 
         resetLiveState()
         active = ride
-        begin(rideName: name, startedAt: startedAt)
+        begin(rideName: name, startedAt: startedAt, resuming: false)
     }
 
     /// Shared by a fresh start and resuming an interrupted ride.
-    private func begin(rideName: String, startedAt: Date) {
+    private func begin(rideName: String, startedAt: Date, resuming: Bool) {
         autoPause = AutoPauseDetector(sensitivity: AppSettings.autoPauseSensitivity)
         loadWishlist()
         startLocation()
         photos.observeChanges { [weak self] in
             Task { @MainActor in self?.scheduleSweep() }
         }
-        if !liveActivity.adoptExisting() {
+        // A resumed ride keeps its Live Activity if iOS kept it; a fresh ride replaces any leftover.
+        if !(resuming && liveActivity.adoptExisting()) {
             liveActivity.start(rideName: rideName, startedAt: startedAt, state: activityState())
         }
         phase = .recording
@@ -290,7 +291,7 @@ final class RideRecorder {
         recoveredPoints.forEach { stats.add($0) }
         stats.breakSegment()
         recoveredPoints = []
-        begin(rideName: ride.name, startedAt: ride.startedAt)
+        begin(rideName: ride.name, startedAt: ride.startedAt, resuming: true)
     }
 
     /// Saves an interrupted ride as ended at its last recorded point.
@@ -309,8 +310,9 @@ final class RideRecorder {
     func runLateSweeps() async {
         guard phase == .idle, photos.hasFullAccess else { return }
         let now = Date.now
-        let descriptor = FetchDescriptor<Ride>(predicate: #Predicate { ($0.albumSweepUntil ?? now) > now })
-        for ride in (try? context.fetch(descriptor)) ?? [] {
+        let descriptor = FetchDescriptor<Ride>(predicate: #Predicate { $0.albumSweepUntil != nil })
+        let recent = ((try? context.fetch(descriptor)) ?? []).filter { ($0.albumSweepUntil ?? .distantPast) > now }
+        for ride in recent {
             if let albumID = ride.albumLocalIdentifier {
                 _ = try? await photos.sweep(albumID: albumID, window: ride.mediaWindow)
             }
