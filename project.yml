@@ -111,6 +111,10 @@ targets:
     dependencies:
       - target: RideTracker
       - package: RideKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker.tests
 
 schemes:
   RideTracker:
