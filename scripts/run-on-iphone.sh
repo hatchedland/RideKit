@@ -7,13 +7,23 @@
 #   3. On the iPhone: Settings › Privacy & Security › Developer Mode › On (it restarts)
 #
 # Usage:  ./scripts/run-on-iphone.sh [TEAM_ID]
-# The Team ID is detected from Xcode's signed-in account when not given.
+# The Team ID is taken from the argument, .team-id, the team picked in Xcode, or your signing
+# certificate, and then remembered in .team-id.
 # Free-account installs expire after 7 days; just run this again (your data is kept).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
+TEAM_FILE=.team-id   # remembered locally, git-ignored
 TEAM_ID="${1:-${TEAM_ID:-}}"
+if [ -z "$TEAM_ID" ] && [ -f "$TEAM_FILE" ]; then
+  TEAM_ID=$(cat "$TEAM_FILE")
+fi
+if [ -z "$TEAM_ID" ] && [ -f RideTracker.xcodeproj/project.pbxproj ]; then
+  # Picked in Xcode › target › Signing & Capabilities › Team (lost on the next xcodegen run).
+  TEAM_ID=$(grep -o 'DEVELOPMENT_TEAM = [A-Z0-9]\{10\};' RideTracker.xcodeproj/project.pbxproj \
+    | head -1 | sed 's/DEVELOPMENT_TEAM = \(.*\);/\1/' || true)
+fi
 if [ -z "$TEAM_ID" ]; then
   # Signing certificates name the team in parentheses: "Apple Development: Name (ABCDE12345)".
   TEAM_ID=$(security find-identity -v -p codesigning 2>/dev/null \
@@ -25,7 +35,8 @@ if [ -z "$TEAM_ID" ]; then
     | sed -n 's/.*teamID = \([A-Z0-9]\{10\}\);.*/\1/p' | head -1 || true)
 fi
 if [ -z "$TEAM_ID" ]; then
-  echo "No Apple ID found in Xcode. Add one in Xcode › Settings › Accounts, then run this again." >&2
+  echo "No development team found. Once: open RideTracker.xcodeproj, select the RideTracker target ›" >&2
+  echo "Signing & Capabilities › Team › your \"(Personal Team)\", then run this again." >&2
   echo "(Or pass your Team ID: ./scripts/run-on-iphone.sh ABCDE12345)" >&2
   exit 1
 fi
@@ -37,6 +48,7 @@ if [ -z "$DEVICE_ID" ]; then
   exit 1
 fi
 
+echo "$TEAM_ID" > "$TEAM_FILE"
 echo "Team $TEAM_ID → iPhone $DEVICE_ID"
 xcodegen generate --quiet
 xcodebuild -project RideTracker.xcodeproj -scheme "RideTracker (Personal)" \
