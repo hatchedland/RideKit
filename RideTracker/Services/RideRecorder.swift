@@ -27,6 +27,8 @@ final class RideRecorder {
     private(set) var isAutoPaused = false
     private(set) var albumItemCount = 0
     private(set) var spotsMarkedThisRide = 0
+    /// Songs from Apple Music logged so far this ride.
+    private(set) var songsThisRide = 0
     private(set) var locationDenied = false
     private(set) var gpsUnavailable = false
     var banner: Banner?
@@ -47,6 +49,9 @@ final class RideRecorder {
     let spots: SpotService
     let organizer: MediaOrganizer
     private let location = LocationService()
+    private let music = MusicService()
+    private var songLog = SongLog()
+    private var musicTask: Task<Void, Never>?
     private let liveActivity = LiveActivityController()
     private let buffer: TrackBuffer
 
@@ -81,6 +86,9 @@ final class RideRecorder {
 
         if photos.authorizationStatus == .notDetermined {
             await photos.requestAccess()
+        }
+        if AppSettings.trackSongs, music.authorizationStatus == .notDetermined {
+            await music.requestAccess()
         }
 
         let startedAt = Date.now
@@ -118,6 +126,7 @@ final class RideRecorder {
         }
         phase = .recording
         scheduleSweep(after: .zero)
+        startMusicLog()
     }
 
     private func startLocation() {
@@ -232,6 +241,42 @@ final class RideRecorder {
         }
     }
 
+    // MARK: - Soundtrack
+
+    /// Checks the Music app every 5 s and saves each song as soon as it has been played long enough
+    /// to count, so a crash mid-ride loses nothing.
+    private func startMusicLog() {
+        musicTask?.cancel()
+        songLog = SongLog()
+        guard AppSettings.trackSongs else { return }
+        musicTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let now = self.music.nowPlaying()
+                if let play = self.songLog.observe(now.song, isPlaying: now.isPlaying, at: .now) {
+                    self.save(play)
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    private func stopMusicLog(at time: Date) {
+        musicTask?.cancel()
+        musicTask = nil
+        if let play = songLog.finish(at: time) { save(play) }
+    }
+
+    private func save(_ play: SongPlay) {
+        guard let ride = active, let model = rideModel(ride.id) else { return }
+        let coordinate = track.coordinate(at: play.startedAt) ?? track.last(where: { $0.timestamp <= play.startedAt })?.coordinate
+        let song = PlayedSong(play: play, at: coordinate)
+        song.ride = model
+        context.insert(song)
+        try? context.save()
+        songsThisRide += 1
+    }
+
     // MARK: - End
 
     func stop() async {
@@ -241,6 +286,7 @@ final class RideRecorder {
 
     private func finish(_ ride: ActiveRide, points: [TrackPoint], endedAt: Date) async {
         phase = .finishing
+        stopMusicLog(at: endedAt)
         location.stop()
         photos.stopObserving()
         sweepTask?.cancel()
@@ -391,6 +437,7 @@ final class RideRecorder {
         isAutoPaused = false
         albumItemCount = 0
         spotsMarkedThisRide = 0
+        songsThisRide = 0
         alertedWishlist = []
         lastNearbyCheck = .distantPast
         banner = nil

@@ -10,6 +10,7 @@ enum AppSettings {
         static let nearbyAlerts = "settings.nearbyAlerts"
         static let spotRadius = "settings.spotRadius"
         static let hasSeenSafetyNotice = "settings.hasSeenSafetyNotice"
+        static let trackSongs = "settings.trackSongs"
     }
 
     enum Units: String, CaseIterable, Identifiable {
@@ -46,6 +47,11 @@ enum AppSettings {
 
     static var nearbyAlerts: Bool {
         defaults.object(forKey: Key.nearbyAlerts) as? Bool ?? true
+    }
+
+    /// Log songs played in the Music app during rides.
+    static var trackSongs: Bool {
+        defaults.object(forKey: Key.trackSongs) as? Bool ?? true
     }
 
     /// Radius for attaching photos to spots and for wishlist auto-visit.
