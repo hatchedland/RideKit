@@ -46,6 +46,25 @@ No backend and no account. Data stays on the device and syncs through the user's
    60 km/h, with a 3-minute stop at Kundli). For real background tracking and Live Activities, use
    a device.
 
+## Run on your own iPhone (free Apple ID)
+
+No paid developer account is needed to test on your own phone. The **Personal** build is identical
+except iCloud sync is off, because free accounts can't use iCloud. Data stays on the phone.
+
+1. **Xcode › Settings › Accounts › +** and sign in with your Apple ID.
+2. Connect the iPhone by cable, unlock it, and tap **Trust This Computer**.
+3. On the iPhone, turn on **Settings › Privacy & Security › Developer Mode** (it restarts).
+4. Run:
+   ```sh
+   ./scripts/run-on-iphone.sh
+   ```
+   Or in Xcode, pick the **RideTracker (Personal)** scheme and your iPhone, then press **⌘R**.
+5. The first time, the iPhone blocks the app: go to **Settings › General › VPN & Device Management**,
+   tap your Apple ID and choose **Trust**.
+
+Free installs stop opening after **7 days**. Run the script again to refresh; your rides and spots are
+kept.
+
 ## Tests
 
 ```sh
