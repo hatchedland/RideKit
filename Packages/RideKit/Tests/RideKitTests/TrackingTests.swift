@@ -213,3 +213,31 @@ struct AutoPauseTests {
         #expect(!d.isPaused)
     }
 }
+
+@Suite("Live ride stats")
+struct LiveRideStatsTests {
+    @Test func matchesFullSummary() {
+        var points = Fixtures.track(segments: [(300, 18), (150, 0), (200, 9)])
+        points[100].speed = 70   // spike, filtered the same way in both
+        var live = LiveRideStats()
+        points.forEach { live.add($0) }
+        let full = RideStats.summarize(points)
+        #expect(abs(live.distanceMeters - full.distanceMeters) < 0.001)
+        #expect(live.movingSeconds == full.movingSeconds)
+        #expect(abs(live.avgMovingSpeedMps - full.avgMovingSpeedMps) < 0.001)
+        #expect(abs(live.maxSpeedMps - 18) < 0.001)
+        #expect(live.currentSpeedMps == 9)
+        #expect(live.pointCount == points.count)
+    }
+
+    @Test func breakSegmentSkipsTheGap() {
+        let first = Fixtures.track(segments: [(10, 10)])
+        let resumedFrom = Fixtures.north(of: Fixtures.indiaGate, meters: 5_000)
+        let second = Fixtures.track(from: resumedFrom, startingAt: Fixtures.start.addingTimeInterval(600), segments: [(10, 10)])
+        var live = LiveRideStats()
+        first.forEach { live.add($0) }
+        live.breakSegment()
+        second.forEach { live.add($0) }
+        #expect(abs(live.distanceMeters - 200) < 0.01)
+    }
+}
