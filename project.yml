@@ -2,6 +2,13 @@
 # (RideTracker.xcodeproj is generated, not committed.)
 name: RideTracker
 
+# "Personal" = Debug without iCloud, for running on your own iPhone with a free Apple ID
+# (free Personal Teams can't sign apps that use iCloud). Use the "RideTracker (Personal)" scheme.
+configs:
+  Debug: debug
+  Personal: debug
+  Release: release
+
 options:
   bundleIdPrefix: com.hatchedland
   deploymentTarget:
@@ -42,14 +49,6 @@ targets:
       - target: RideTrackerWidgets
         embed: true
         codeSign: true
-    entitlements:
-      path: RideTracker/Resources/RideTracker.entitlements
-      properties:
-        com.apple.developer.icloud-container-identifiers:
-          - iCloud.com.hatchedland.ridetracker
-        com.apple.developer.icloud-services:
-          - CloudKit
-        aps-environment: development
     info:
       path: RideTracker/Resources/Info.plist
       properties:
@@ -80,9 +79,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker
+        # iCloud container iCloud.com.hatchedland.ridetracker + CloudKit + push (edit the file directly)
+        CODE_SIGN_ENTITLEMENTS: RideTracker/Resources/RideTracker.entitlements
         INFOPLIST_KEY_CFBundleDisplayName: Ride Tracker
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Personal:
+          CODE_SIGN_ENTITLEMENTS: RideTracker/Resources/RideTracker-Personal.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG PERSONAL_TEAM
 
   RideTrackerWidgets:
     type: app-extension
@@ -117,6 +122,16 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker.tests
 
 schemes:
+  RideTracker (Personal):
+    build:
+      targets:
+        RideTracker: all
+    run:
+      config: Personal
+      simulateLocation:
+        allow: true
+    archive:
+      config: Personal
   RideTracker:
     build:
       targets:
