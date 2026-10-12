@@ -29,6 +29,8 @@ final class Ride {
 
     @Relationship(deleteRule: .nullify, inverse: \Spot.ride) var spots: [Spot]? = []
     @Relationship(deleteRule: .cascade, inverse: \MediaLink.ride) var media: [MediaLink]? = []
+    /// Songs from Apple Music played during the ride (added in schema V2).
+    @Relationship(deleteRule: .cascade, inverse: \PlayedSong.ride) var songs: [PlayedSong]? = []
 
     init(id: UUID, name: String, startedAt: Date) {
         self.id = id
@@ -38,6 +40,8 @@ final class Ride {
     }
 
     var duration: TimeInterval { endedAt.timeIntervalSince(startedAt) }
+
+    var soundtrack: [PlayedSong] { (songs ?? []).sorted { $0.startedAt < $1.startedAt } }
 
     var mediaWindow: RideMediaWindow {
         RideMediaWindow(start: startedAt, end: endedAt, includeScreenshots: includeScreenshots)

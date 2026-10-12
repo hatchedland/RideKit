@@ -13,6 +13,7 @@ struct RideDetailView: View {
     @State private var newName = ""
     @State private var confirmingDelete = false
     @State private var gpxURL: URL?
+    @State private var shareRequest: MediaShareRequest?
 
     var body: some View {
         List {
@@ -40,15 +41,26 @@ struct RideDetailView: View {
             }
 
             if let media = ride.media, !media.isEmpty {
+                let sorted = media.sorted { $0.capturedAt < $1.capturedAt }
                 Section {
-                    MediaGrid(links: media.sorted { $0.capturedAt < $1.capturedAt })
+                    MediaGrid(links: sorted)
                         .listRowInsets(EdgeInsets())
                 } header: {
-                    Text("Album · \(media.count) photos & videos")
+                    HStack {
+                        Text("Album · \(media.count) photos & videos")
+                        Spacer()
+                        Button("Share all", systemImage: "square.and.arrow.up") {
+                            shareRequest = MediaShareRequest(localIdentifiers: sorted.map(\.localIdentifier))
+                        }
+                        .font(.footnote)
+                        .textCase(nil)
+                    }
                 } footer: {
                     Text("Also in the Photos app under Albums › Ride Tracker › \(ride.name).")
                 }
             }
+
+            SoundtrackSection(ride: ride)
 
             Section("Notes") {
                 TextField("How was the ride?", text: $ride.notes, axis: .vertical)
@@ -91,6 +103,7 @@ struct RideDetailView: View {
         } message: {
             Text("Your photos and videos are never deleted. Spots you marked stay in your Spots.")
         }
+        .mediaSharing($shareRequest)
         .task(id: ride.trackData) {
             track = ride.decodedTrack()
             gpxURL = writeGPX()

@@ -71,6 +71,8 @@ struct RideSummaryView: View {
                     }
                 }
             }
+
+            SoundtrackSection(ride: ride)
         }
         .navigationTitle(ride.name)
         .navigationDestination(for: Spot.self) { SpotDetailView(spot: $0) }

@@ -102,6 +102,9 @@ struct RidingView: View {
             if recorder.spotsMarkedThisRide > 0 {
                 badge("\(recorder.spotsMarkedThisRide)", "mappin", .red)
             }
+            if recorder.songsThisRide > 0 {
+                badge("\(recorder.songsThisRide)", "music.note", .pink)
+            }
             if recorder.locationDenied {
                 badge("Location off", "location.slash", .red)
             } else if recorder.gpsUnavailable {
