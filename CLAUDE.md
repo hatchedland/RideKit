@@ -20,6 +20,10 @@ Setup and release checklist: [README.md](README.md).
   from live events. Late arrivals are swept for 48 h. Screenshots excluded by default.
 - **Photos are referenced, never copied** (`PHAsset` local ID + `PHCloudIdentifier`). Deleting a ride
   or spot never deletes photos; deleting an album only on explicit choice.
+- **Ride soundtrack**: songs played in the **Music app** (Apple Music / own library) for ≥ 30 s during
+  a ride are logged with time and place, opened via Apple Music links. Other apps (Spotify, …) are not
+  readable by iOS apps — don't promise them. Uses MediaPlayer (no MusicKit entitlement, so it works
+  on free Personal builds).
 - **No GoPro / action-camera support.** Photos without GPS stay in the album, just unpinned.
 - **App Store release target.** No backend, no accounts: SwiftData + CloudKit private database only.
 
@@ -32,6 +36,9 @@ Setup and release checklist: [README.md](README.md).
 - **SwiftData models must stay CloudKit-compatible**: no `@Attribute(.unique)`, every property has a
   default or is optional, every relationship optional. Schema changes are **additive only** and go
   through a new `VersionedSchema` + `SchemaMigrationPlan` (see `RideTracker/Models/Schema.swift`).
+  Released versions are **frozen as nested model copies** (V1 = v1.0.0; V2 adds `PlayedSong`); the
+  top-level models are always the latest. Every schema change needs a migration test from the previous
+  version (see `RideTrackerTests/MigrationTests.swift`).
 - A ride's track is **one compressed blob** (`TrackCodec`), never one row per GPS point.
 - Pure logic belongs in **`Packages/RideKit`** (no UIKit/SwiftUI/SwiftData there) with tests.
   App code (`RideTracker/`) maps models to RideKit value types (`SpotReference`, `MediaCandidate`).
