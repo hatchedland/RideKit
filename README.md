@@ -11,6 +11,10 @@ A native iOS app for motorcycle and scooter rides, built around **places**:
   between **Start** and **End** lands in *Photos › Albums › Ride Tracker › your ride name*.
 - Inside the app, photos also appear at the spot where you took them (within 150 m) or along the
   route.
+- **Share** any ride or spot photo or video to WhatsApp, Instagram, AirDrop and other apps as the
+  original file, or jump to the Photos app.
+- **Ride soundtrack.** Songs you play in the Music app during a ride (30 s or more) are logged with
+  when and where they played. Open them in Apple Music or share the list.
 
 No backend and no account. Data stays on the device and syncs through the user's own iCloud
 (SwiftData + CloudKit). See [PLAN.md](PLAN.md) for the full product plan.
@@ -19,11 +23,11 @@ No backend and no account. Data stays on the device and syncs through the user's
 
 | Path | What's there |
 |---|---|
-| `Packages/RideKit` | Pure Swift logic, fully unit-tested: Google Maps link building/parsing, GPS filtering, ride stats, auto-pause, track storage and crash recovery, the ride-album time window, photo↔spot matching, wishlist auto-visit, ride naming, GPX/KML export |
-| `RideTracker/` | The iOS app: SwiftData models, services (location, Photos albums, spots, recorder, Live Activity) and SwiftUI screens |
+| `Packages/RideKit` | Pure Swift logic, fully unit-tested: Google Maps link building/parsing, GPS filtering, ride stats, auto-pause, track storage and crash recovery, the ride-album time window, photo↔spot matching, wishlist auto-visit, ride naming, GPX/KML export, the song log for ride soundtracks |
+| `RideTracker/` | The iOS app: SwiftData models (versioned schema with migrations), services (location, Photos albums, spots, music, recorder, Live Activity) and SwiftUI screens, including media sharing |
 | `RideTrackerWidgets/` | Live Activity and Dynamic Island, with Mark spot and Pause buttons |
 | `Shared/` | Code compiled into both the app and the widget (activity attributes, App Intents) |
-| `RideTrackerTests/` | App-level tests |
+| `RideTrackerTests/` | App-level tests, including schema migration and media export |
 | `TestRoutes/` | GPX routes for simulator location playback |
 | `project.yml` | XcodeGen definition. The `.xcodeproj` is generated, not committed |
 
@@ -61,6 +65,11 @@ except iCloud sync is off, because free accounts can't use iCloud. Data stays on
    Or in Xcode, pick the **RideTracker (Personal)** scheme and your iPhone, then press **⌘R**.
 5. The first time, the iPhone blocks the app: go to **Settings › General › VPN & Device Management**,
    tap your Apple ID and choose **Trust**.
+
+**No cable after the first time:** once the iPhone has been paired by cable, it can install over
+Wi-Fi. Keep the iPhone and Mac on the **same Wi-Fi network** with the iPhone unlocked, and run the
+script as usual. If it isn't found, open **Xcode › Window › Devices and Simulators**, select the iPhone
+and tick **Connect via network**.
 
 Free installs stop opening after **7 days**. Run the script again to refresh; your rides and spots are
 kept.
