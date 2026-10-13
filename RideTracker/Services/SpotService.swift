@@ -22,6 +22,7 @@ final class SpotService {
     }
 
     /// Marks a spot at `coordinate`. During a ride the spot is visited; otherwise it uses `status`.
+    /// `visitedAt` dates the visit, e.g. when a trail stop is saved as a spot after the ride.
     @discardableResult
     func mark(
         at coordinate: Coordinate,
@@ -30,18 +31,20 @@ final class SpotService {
         category: SpotCategory = .other,
         sourceURL: String? = nil,
         rideID: UUID? = nil,
-        allowRevisit: Bool = true
+        allowRevisit: Bool = true,
+        visitedAt: Date = .now
     ) -> AddResult {
         let all = (try? context.fetch(FetchDescriptor<Spot>())) ?? []
 
         if allowRevisit, let match = RevisitDetector.existingSpot(near: coordinate, in: all.map(\.reference)),
            let existing = all.first(where: { $0.id == match.id }) {
-            if status == .visited { existing.markVisited(on: .now) }
+            if status == .visited { existing.markVisited(on: visitedAt) }
             try? context.save()
             return .revisited(existing)
         }
 
         let spot = Spot(name: name, coordinate: coordinate, status: status, category: category, sourceURL: sourceURL)
+        if status == .visited { spot.visits = [visitedAt] }
         if let rideID {
             spot.ride = try? context.fetch(FetchDescriptor<Ride>(predicate: #Predicate { $0.id == rideID })).first
         }
@@ -71,7 +74,7 @@ final class SpotService {
 
     /// Address and city/area for a coordinate. Runs off the main actor because the MapKit request
     /// types aren't `Sendable`; only plain strings come back.
-    nonisolated private static func reverseGeocode(_ coordinate: Coordinate) async -> (address: String?, locality: String?) {
+    nonisolated static func reverseGeocode(_ coordinate: Coordinate) async -> (address: String?, locality: String?) {
         guard let request = MKReverseGeocodingRequest(location: coordinate.clLocation),
               let item = try? await request.mapItems.first
         else { return (nil, nil) }
