@@ -18,7 +18,7 @@ struct SpotDetailView: View {
             Section {
                 Map(initialPosition: .camera(MapCamera(centerCoordinate: spot.coordinate.clCoordinate, distance: 1_500))) {
                     Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                        .tint(spot.status == .wantToGo ? .yellow : .red)
+                        .tint(spot.status.tint)
                 }
                 .frame(height: 200)
                 .listRowInsets(EdgeInsets())

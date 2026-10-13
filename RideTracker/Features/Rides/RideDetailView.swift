@@ -142,22 +142,22 @@ struct RideMap: View {
                     .stroke(segment.color, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
             if let first = track.first {
-                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(.green)
+                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(Brand.highwayYellow)
             }
             if let last = track.last, track.count > 1 {
-                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(.black)
+                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(Brand.asphalt)
             }
             ForEach(spots) { spot in
                 Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                    .tint(.red)
+                    .tint(spot.status.tint)
             }
             ForEach(media.filter { $0.spot == nil && $0.coordinate != nil }) { link in
                 Annotation("", coordinate: link.coordinate!.clCoordinate) {
                     Image(systemName: link.isVideo ? "video.fill" : "camera.fill")
                         .font(.caption2)
                         .padding(5)
-                        .background(.purple, in: .circle)
-                        .foregroundStyle(.white)
+                        .background(Brand.asphalt, in: .circle)
+                        .foregroundStyle(Brand.chalk)
                 }
             }
         }
