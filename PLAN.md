@@ -8,11 +8,12 @@ automatically** by the spot and ride where you took them.
 Data stays on the device and syncs through the user's own iCloud. The app is built for
 **App Store release**.
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-13_
 
-> **Status:** v1.0.0 and **v1.1.0 are released** on `main`. The app runs on the owner's iPhone through
-> the free **Personal** build (no paid Apple Developer Program yet, so iCloud sync, TestFlight and the
-> App Store are on hold). Real-ride field testing is in progress.
+> **Status:** v1.0.0 and **v1.1.0 are released** on `main`. The **Milestone brand** and the **photo
+> trail** are merged into `dev` and going to `main` (version not bumped yet). The app runs on the
+> owner's iPhone through the free **Personal** build (no paid Apple Developer Program yet, so iCloud
+> sync, TestFlight and the App Store are on hold). Real-ride field testing is in progress. **Next: Trips.**
 
 ---
 
@@ -117,8 +118,22 @@ turn-by-turn navigation, and crash detection.
 - **Manual fixes:** move an item to another spot, detach it, or add items from the picker.
 - **Browse:**
   - spot → photo/video grid (videos play inline)
-  - ride → photos along the route on the map
+  - ride → **photo trail** (default) or grid, and photos along the route on the map
   - "Places" view → media grouped by area/city (from reverse geocoding)
+- **Photo trail** (added after v1.1.0): the ride told in order, `START → road → stop → road → … → END`.
+  - **Stops:** a spot (photos within the spot radius, or a spot marked/visited on the ride, even
+    without photos), or a **cluster** of photos within 150 m and 10 min of each other.
+  - Each stop shows a milestone marker, its name, **km from the start**, the time and a swipeable
+    photo strip. Tapping a photo opens the full-screen viewer; tapping a spot opens it.
+  - **Unnamed clusters** get a suggested name (nearest Apple Maps landmark, else "near *town*", ✦)
+    cached on the device (not synced), and a **Save as spot** button. The new spot's visit is dated
+    when the photos were taken, and its photos attach to it.
+  - **Road between stops:** distance and riding time, the songs that started on that stretch, and
+    photos without GPS taken away from any stop ("On the road").
+  - **Photos without GPS** join the stop closest in time (within 10 min); they're placed in the
+    trail only and still **never get a map pin**.
+  - Pure logic in RideKit (`Trail.build`), tested; the app maps models to it (`RideTrailRows`,
+    `TrailNamer`). No schema change.
 
 **E. Ride recording (the frame around spots)**
 - **Start ride → name it:** a sheet with a text field (keyboard opens automatically) and a large
@@ -150,9 +165,35 @@ devices. Spots can be exported as GPX or KML, which **imports into Google My Map
 - **Free iPhone testing:** a Personal build without iCloud plus `scripts/run-on-iphone.sh`, so the app
   runs on your own iPhone with a free Apple ID (reinstall every 7 days).
 
-### Next (ideas, not scheduled)
-- **Trips:** group several rides (for example "Ladakh 2026") with a combined map, spots and media,
-  and an album per trip, with ride albums nested inside its folder.
+### v1.2.0 (on `dev`, not yet versioned)
+- **Milestone brand:** the Indian highway km-stone as the app's identity (see §12).
+- **Photo trail** on ride detail (see D above), with **Save as spot** for unnamed stops.
+- Debug-only `-seedSampleRide` launch argument for checking screens in the simulator.
+
+### Next (planned)
+- **Trips** (next to build; decided 2026-10-13):
+  - A trip groups rides, for example "Ladakh 2026": combined map with each day in its own colour,
+    Day 1…N with rest days, total km, all spots, photos and soundtrack. The photo trail becomes the
+    trip's day-by-day story.
+  - **Active trip:** start a trip once; every ride started afterwards (including from the Action
+    button and Siri) joins it until the trip is ended. Rides can be added to or removed from a trip
+    afterwards, or a trip made from selected rides.
+  - **Photos:** each trip is a folder, `Ride Tracker / Ladakh 2026 / <ride albums>`. Adding or removing
+    a ride moves its album; deleting a trip moves albums back and never deletes photos.
+  - **Naming:** an empty ride name inside a trip defaults to *"Ladakh 2026 · Day 4"* (also the album
+    name). Outside a trip it stays *"Ride · 12 Oct 2026"*.
+  - **Not in the first cut:** photos from rest days (no ride, so no album).
+  - Build order: RideKit `TripDays` / `TripSummary` / naming / auto-end suggestion → schema V3 (freeze
+    V2 as nested copies, add `Trip` + `Ride.trip`, migration tests V2→V3 and V1→V3) → Photos folder
+    nesting and moves → active-trip lifecycle → UI → v1.2.0 or v1.3.0.
+- **Road character** (after Trips, field test first): surface (smooth / rough / broken) from the
+  motion sensor when the phone is rigidly mounted, road shape (highway / twisties / ghat / city /
+  off-road) from the GPS track, NH/SH names from sampled reverse geocoding if Apple's data has them.
+  Shown after the ride only (map colour toggle, summary line), never as alerts. Start with a hidden
+  debug logger on real rides to confirm the signal is usable.
+- Rider ideas to weigh: km since last fuel on the Live Activity, "daylight left" (sunset computed on
+  device), an evening queue for naming today's spots, a one-tap "Reached, safe" share, keeping the
+  trail and map in sync while scrolling.
 - **Home Screen widgets:** "Mark spot" and "Last spot".
 - **Share a spot card:** an image with the photo, name, map snippet and Google Maps link.
 - **Nearby wishlist alerts without a ride** (region monitoring, which needs "Always" location — opt-in).
@@ -374,7 +415,40 @@ TestFlight. Milestone 9 hasn't started.
   no TestFlight or other testers for now.
 - Shared photos and videos are the **original files**, sent through the system share sheet.
 - The ride soundtrack covers the **Music app only**, songs count after 30 s, and it's on by default.
+- The app is **for motorcycles and scooters only**: no car mode or vehicle type (decided 2026-10-13).
+- Ride photos are shown as a **trail** by default; unnamed photo stops are **suggested, never
+  auto-saved** as spots; photos without GPS are placed in the trail by time but stay off the map.
 
 ## 11. Open questions
 
 1. Do you want to import your existing **Google Maps saved places** into the wishlist (from a Google Takeout file)?
+2. **App Store name.** "Ride Tracker" describes the app rather than naming it. Checked on the India
+   App Store (2026-10-13): **KM Stone** (free, recommended, subtitle e.g. "Ride spots & road
+   journal"), **Ghumakkad** (free, most character, harder to spell outside India), "Milestone"
+   (crowded and unrelated, risky to trademark; fine as the internal design-system name), "Safarnama"
+   and "Meel" (taken).
+3. Version for the brand + trail release: **v1.2.0** (with Trips in v1.3.0) or hold the bump until
+   Trips ships?
+
+## 12. Brand: Milestone
+
+The Indian highway kilometre stone: a slab with a half-round coloured cap. Every rider in India knows
+it, and the cap colour already encodes road type (yellow NH, green SH, …).
+
+| Token (`Shared/Brand.swift`) | Value | Use |
+|---|---|---|
+| `highwayYellow` | `#F5C400` | **Fills only**, always with asphalt text on it (10.6:1). Never text on white (1.6:1). Wishlist spots, Start / Mark spot buttons, route line while riding, trail road |
+| `asphalt` | `#1B1A17` | Riding screen background, text on yellow, visited spots |
+| `chalk` | `#F6F3EA` | The stone's body, light surfaces |
+| `accent` | `#8A6100` light / `#F5C400` dark | Tinted text and controls (5.5:1 on white); also the `AccentColor` asset |
+| `signal` | `#C22E22` light / `#FF5A4A` dark | Recording, End and problems only |
+
+- **Type:** big numbers in SF Pro **expanded** width (signboard feel, `Brand.readout`, `Brand.stat`,
+  `Brand.label`); everything else is the system font. No custom font files.
+- **Two modes:** while riding the screen is an always-dark instrument cluster (yellow on asphalt);
+  after the ride it's a journal (light, milestone markers, photos first).
+- **Status chips:** counters are quiet asphalt chips; only state that needs attention gets colour.
+- **Speed colours** on the ride map are data, not brand, and keep their ramp.
+- **Icon:** a km-stone with a yellow cap and a map pin cut into it, beside a road with a dashed yellow
+  centre line. Rendered by `design/make-icon.swift`.
+- **Voice (to do):** short and warm like road signs, e.g. "Saved. Name it at the chai stop."
