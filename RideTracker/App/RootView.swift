@@ -7,7 +7,11 @@ struct RootView: View {
     @AppStorage(AppSettings.Key.hasSeenSafetyNotice) private var hasSeenSafetyNotice = false
 
     enum TabID: Hashable { case ride, spots, rides, settings }
+    #if DEBUG
+    @State private var selection: TabID = SampleRide.requested ? .rides : .ride
+    #else
     @State private var selection: TabID = .ride
+    #endif
 
     var body: some View {
         @Bindable var recorder = recorder
