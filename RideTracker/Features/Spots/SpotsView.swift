@@ -110,7 +110,7 @@ private struct SpotsMap: View {
                 UserAnnotation()
                 ForEach(spots) { spot in
                     Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                        .tint(spot.status == .wantToGo ? .yellow : .red)
+                        .tint(spot.status.tint)
                         .tag(spot)
                 }
             }
@@ -204,7 +204,7 @@ struct SpotRow: View {
             Image(systemName: spot.category.systemImage)
                 .font(.title3)
                 .frame(width: 40, height: 40)
-                .background((spot.status == .wantToGo ? Color.yellow : Color.red).opacity(0.2), in: .circle)
+                .background(spot.status.tint.opacity(0.2), in: .circle)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(spot.displayName).font(.headline).lineLimit(1)
@@ -224,6 +224,16 @@ struct SpotRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+extension SpotStatus {
+    /// Wishlist = highway yellow (the road ahead); visited = asphalt (ridden).
+    var tint: Color {
+        switch self {
+        case .wantToGo: Brand.highwayYellow
+        case .visited: Brand.asphalt
         }
     }
 }

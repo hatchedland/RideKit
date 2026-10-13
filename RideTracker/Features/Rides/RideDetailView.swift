@@ -14,6 +14,9 @@ struct RideDetailView: View {
     @State private var confirmingDelete = false
     @State private var gpxURL: URL?
     @State private var shareRequest: MediaShareRequest?
+    @State private var mediaMode = MediaMode.trail
+
+    enum MediaMode { case trail, grid }
 
     var body: some View {
         List {
@@ -32,30 +35,37 @@ struct RideDetailView: View {
                 }
             }
 
-            if let spots = ride.spots, !spots.isEmpty {
-                Section("Spots (\(spots.count))") {
-                    ForEach(spots.sorted { $0.createdAt < $1.createdAt }) { spot in
-                        NavigationLink(value: spot) { SpotRow(spot: spot) }
+            let media = (ride.media ?? []).sorted { $0.capturedAt < $1.capturedAt }
+            Section {
+                if !media.isEmpty {
+                    Picker("Show", selection: $mediaMode) {
+                        Text("Trail").tag(MediaMode.trail)
+                        Text("Grid").tag(MediaMode.grid)
                     }
+                    .pickerStyle(.segmented)
+                    .listRowSeparator(.hidden)
                 }
-            }
 
-            if let media = ride.media, !media.isEmpty {
-                let sorted = media.sorted { $0.capturedAt < $1.capturedAt }
-                Section {
-                    MediaGrid(links: sorted)
+                if mediaMode == .trail || media.isEmpty {
+                    RideTrailRows(ride: ride, track: track)
+                } else {
+                    MediaGrid(links: media)
                         .listRowInsets(EdgeInsets())
-                } header: {
-                    HStack {
-                        Text("Album · \(media.count) photos & videos")
-                        Spacer()
+                }
+            } header: {
+                HStack {
+                    Text(media.isEmpty ? "Trail" : "Trail · \(media.count) photos & videos")
+                    Spacer()
+                    if !media.isEmpty {
                         Button("Share all", systemImage: "square.and.arrow.up") {
-                            shareRequest = MediaShareRequest(localIdentifiers: sorted.map(\.localIdentifier))
+                            shareRequest = MediaShareRequest(localIdentifiers: media.map(\.localIdentifier))
                         }
                         .font(.footnote)
                         .textCase(nil)
                     }
-                } footer: {
+                }
+            } footer: {
+                if !media.isEmpty {
                     Text("Also in the Photos app under Albums › Ride Tracker › \(ride.name).")
                 }
             }
@@ -142,22 +152,22 @@ struct RideMap: View {
                     .stroke(segment.color, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
             if let first = track.first {
-                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(.green)
+                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(Brand.highwayYellow)
             }
             if let last = track.last, track.count > 1 {
-                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(.black)
+                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(Brand.asphalt)
             }
             ForEach(spots) { spot in
                 Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                    .tint(.red)
+                    .tint(spot.status.tint)
             }
             ForEach(media.filter { $0.spot == nil && $0.coordinate != nil }) { link in
                 Annotation("", coordinate: link.coordinate!.clCoordinate) {
                     Image(systemName: link.isVideo ? "video.fill" : "camera.fill")
                         .font(.caption2)
                         .padding(5)
-                        .background(.purple, in: .circle)
-                        .foregroundStyle(.white)
+                        .background(Brand.asphalt, in: .circle)
+                        .foregroundStyle(Brand.chalk)
                 }
             }
         }

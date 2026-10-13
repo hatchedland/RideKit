@@ -15,7 +15,7 @@ struct RideLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RideActivityAttributes.self) { context in
             LockScreenRideView(attributes: context.attributes, state: context.state)
-                .activityBackgroundTint(.black.opacity(0.75))
+                .activityBackgroundTint(Brand.asphalt.opacity(0.85))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
@@ -43,7 +43,7 @@ struct RideLiveActivity: Widget {
             } minimal: {
                 Image(systemName: context.state.isPaused ? "pause.fill" : "road.lanes")
             }
-            .keylineTint(.red)
+            .keylineTint(Brand.highwayYellow)
         }
     }
 }
@@ -95,8 +95,9 @@ private struct MarkSpotButton: View {
             Label(lastSpot ?? "Mark spot", systemImage: "mappin.and.ellipse")
                 .font(.headline)
                 .lineLimit(1)
+                .foregroundStyle(Brand.asphalt)
                 .frame(maxWidth: .infinity, minHeight: 36)
         }
-        .tint(.red)
+        .tint(Brand.highwayYellow)
     }
 }
