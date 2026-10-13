@@ -9,8 +9,10 @@ A native iOS app for motorcycle and scooter rides, built around **places**:
   when one is within 2 km.
 - **A Photos album for every ride.** Name the ride when you start it. Every photo and video taken
   between **Start** and **End** lands in *Photos › Albums › Ride Tracker › your ride name*.
-- Inside the app, photos also appear at the spot where you took them (within 150 m) or along the
-  route.
+- **Photo trail.** Each ride's photos and videos are shown as a trail of **stops** joined by the
+  road between them: the spot where you took them (within 150 m), or a group of photos with a
+  suggested landmark name and a **Save as spot** button. Each stop shows its km from the start; each
+  stretch of road shows its distance, time and the songs that played on it. A Grid view is one tap away.
 - **Share** any ride or spot photo or video to WhatsApp, Instagram, AirDrop and other apps as the
   original file, or jump to the Photos app.
 - **Ride soundtrack.** Songs you play in the Music app during a ride (30 s or more) are logged with
@@ -19,16 +21,21 @@ A native iOS app for motorcycle and scooter rides, built around **places**:
 No backend and no account. Data stays on the device and syncs through the user's own iCloud
 (SwiftData + CloudKit). See [PLAN.md](PLAN.md) for the full product plan.
 
+**Look:** the *Milestone* brand, after the Indian highway km-stone: highway yellow, asphalt and chalk,
+wide signboard numbers, and a dark "instrument cluster" riding screen. The rules live in
+`Shared/Brand.swift`.
+
 ## Project layout
 
 | Path | What's there |
 |---|---|
-| `Packages/RideKit` | Pure Swift logic, fully unit-tested: Google Maps link building/parsing, GPS filtering, ride stats, auto-pause, track storage and crash recovery, the ride-album time window, photo↔spot matching, wishlist auto-visit, ride naming, GPX/KML export, the song log for ride soundtracks |
+| `Packages/RideKit` | Pure Swift logic, fully unit-tested: Google Maps link building/parsing, GPS filtering, ride stats, auto-pause, track storage and crash recovery, the ride-album time window, photo↔spot matching, wishlist auto-visit, ride naming, GPX/KML export, the song log for ride soundtracks, the photo trail (stops, legs, km from start) |
 | `RideTracker/` | The iOS app: SwiftData models (versioned schema with migrations), services (location, Photos albums, spots, music, recorder, Live Activity) and SwiftUI screens, including media sharing |
 | `RideTrackerWidgets/` | Live Activity and Dynamic Island, with Mark spot and Pause buttons |
-| `Shared/` | Code compiled into both the app and the widget (activity attributes, App Intents) |
+| `Shared/` | Code compiled into both the app and the widget (activity attributes, App Intents, brand palette and type) |
 | `RideTrackerTests/` | App-level tests, including schema migration and media export |
 | `TestRoutes/` | GPX routes for simulator location playback |
+| `design/` | `make-icon.swift` renders the app icon: `swift design/make-icon.swift RideTracker/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` |
 | `project.yml` | XcodeGen definition. The `.xcodeproj` is generated, not committed |
 
 ## Getting started
@@ -49,6 +56,11 @@ No backend and no account. Data stays on the device and syncs through the user's
 4. Run on the simulator. The scheme replays `TestRoutes/DelhiToMurthal.gpx` (NH-44 at about
    60 km/h, with a 3-minute stop at Kundli). For real background tracking and Live Activities, use
    a device.
+5. **Sample ride (Debug builds only):** add `-seedSampleRide` to the scheme's launch arguments, or
+   `xcrun simctl launch <device> com.hatchedland.ridetracker -seedSampleRide`. The app (re)creates a
+   Delhi → Murthal ride with a spot, a photo stop, a photo without location and two songs, and opens it.
+   Photos point at whatever is in the simulator's library, so allow full Photos access first (on
+   iOS 26 tap **Allow Full Access**; `simctl privacy grant` isn't honoured).
 
 ## Run on your own iPhone (free Apple ID)
 
@@ -92,4 +104,4 @@ Xcode. It's a stopgap: see the comments in the script for what it can and can't 
 - [ ] Publish a privacy policy page and add its URL in App Store Connect
 - [ ] App Privacy: location and photos are used on device only, not linked to the user, not used for tracking
 - [ ] App Review notes: background location records the ride route, and full Photos access builds the ride album. Attach a short screen recording
-- [ ] Replace the placeholder app icon if you'd like a designed one
+- [ ] Decide the App Store name (shortlist in [PLAN.md](PLAN.md) §11) and check the km-stone icon at small sizes
