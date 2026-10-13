@@ -10,6 +10,9 @@ struct RideTrackerApp: App {
     init() {
         let container = Persistence.makeContainer()
         self.container = container
+        #if DEBUG
+        SampleRide.seedIfRequested(into: container.mainContext)
+        #endif
         _recorder = State(initialValue: RideRecorder(context: container.mainContext))
     }
 

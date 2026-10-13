@@ -4,6 +4,7 @@ import SwiftUI
 struct RidesListView: View {
     @Query(sort: \Ride.startedAt, order: .reverse) private var rides: [Ride]
     @Environment(RideRecorder.self) private var recorder
+    @State private var path: [Ride] = []
 
     private var finished: [Ride] {
         rides.filter { $0.id != recorder.active?.id }
@@ -17,7 +18,7 @@ struct RidesListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(byMonth, id: \.month) { group in
                     Section {
@@ -38,6 +39,13 @@ struct RidesListView: View {
             }
             .navigationTitle("Rides")
             .navigationDestination(for: Ride.self) { RideDetailView(ride: $0) }
+            #if DEBUG
+            .task {
+                if SampleRide.requested, path.isEmpty, let sample = finished.first(where: { $0.name == SampleRide.name }) {
+                    path = [sample]
+                }
+            }
+            #endif
             .navigationDestination(for: Spot.self) { SpotDetailView(spot: $0) }
         }
     }

@@ -87,6 +87,16 @@ enum Format {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
+    /// Position along a ride, read like a milestone: "km 38".
+    static func milestone(_ meters: Double, usesMetric: Bool = AppSettings.usesMetric) -> String {
+        usesMetric ? "km \(Int(meters / 1_000))" : "mi \(Int(meters / 1_609.344))"
+    }
+
+    /// A stretch of road: "52 min", "1 h 10 min".
+    static func roadTime(_ seconds: TimeInterval) -> String {
+        Duration.seconds(max(60, seconds)).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+    }
+
     static func elevation(_ meters: Double, usesMetric: Bool = AppSettings.usesMetric) -> String {
         usesMetric ? String(format: "%.0f m", meters) : String(format: "%.0f ft", meters * 3.280_84)
     }

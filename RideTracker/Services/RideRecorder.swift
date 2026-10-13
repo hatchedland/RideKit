@@ -48,6 +48,7 @@ final class RideRecorder {
     let photos: PhotoLibraryService
     let spots: SpotService
     let organizer: MediaOrganizer
+    let trailNamer: TrailNamer
     private let location = LocationService()
     private let music = MusicService()
     private var songLog = SongLog()
@@ -67,6 +68,7 @@ final class RideRecorder {
         self.photos = photos
         self.spots = SpotService(context: context)
         self.organizer = MediaOrganizer(context: context, photos: photos)
+        self.trailNamer = TrailNamer(spots: spots)
         let directory = URL.applicationSupportDirectory.appending(path: "ActiveRide", directoryHint: .isDirectory)
         self.buffer = TrackBuffer(directory: directory)
 

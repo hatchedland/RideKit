@@ -31,9 +31,11 @@ private struct ReadyView: View {
                     UserAnnotation()
                     ForEach(wishlist) { spot in
                         Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                            .tint(.yellow)
+                            .tint(Brand.highwayYellow)
                     }
                 }
+                // Muted so the wishlist and the Start button carry the colour.
+                .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
@@ -41,21 +43,25 @@ private struct ReadyView: View {
 
                 VStack(spacing: 12) {
                     if let last = rides.first {
-                        Text("Last ride: \(last.name) · \(Format.distance(last.distanceMeters))")
-                            .font(.footnote)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.regularMaterial, in: .capsule)
+                        HStack(spacing: 8) {
+                            MilestoneMark().frame(width: 12)
+                            Text("Last ride: \(last.name) · \(Format.distance(last.distanceMeters))")
+                        }
+                        .font(.footnote)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: .capsule)
                     }
                     Button {
                         showingStart = true
                     } label: {
                         Label("Start ride", systemImage: "play.fill")
-                            .font(.title2.bold())
+                            .font(.title2.bold().width(.expanded))
+                            .foregroundStyle(Brand.asphalt)
                             .frame(maxWidth: .infinity, minHeight: 64)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.green)
+                    .tint(Brand.highwayYellow)
                     .disabled(recorder.phase != .idle)
                 }
                 .padding()
