@@ -101,6 +101,10 @@ struct RidingView: View {
             if recorder.isPaused {
                 badge(recorder.isManuallyPaused ? "Paused" : "Auto-paused", "pause.fill", .highlight)
             }
+            if recorder.isSharingLive {
+                badge("Live", "person.2.fill")
+                    .accessibilityLabel("Friends can follow this ride")
+            }
             badge("\(recorder.albumItemCount)", "photo.on.rectangle")
             if recorder.spotsMarkedThisRide > 0 {
                 badge("\(recorder.spotsMarkedThisRide)", "mappin")

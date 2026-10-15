@@ -6,7 +6,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppSettings.Key.hasSeenSafetyNotice) private var hasSeenSafetyNotice = false
 
-    enum TabID: Hashable { case ride, spots, rides, settings }
+    enum TabID: Hashable { case ride, spots, rides, friends, settings }
     #if DEBUG
     @State private var selection: TabID = SampleRide.requested ? .rides : .ride
     #else
@@ -25,6 +25,9 @@ struct RootView: View {
             }
             Tab("Rides", systemImage: "list.bullet.rectangle", value: .rides) {
                 RidesListView()
+            }
+            Tab("Friends", systemImage: "person.2", value: .friends) {
+                FriendsView()
             }
             Tab("Settings", systemImage: "gearshape", value: .settings) {
                 SettingsView()
@@ -51,6 +54,13 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await recorder.runLateSweeps() } }
+        }
+        .task {
+            ShareAcceptance.install { metadata in
+                selection = .friends
+                Task { await recorder.friends.accept(metadata) }
+            }
+            await recorder.friends.start(isRidingLive: recorder.isSharingLive)
         }
         .onChange(of: recorder.isRiding) { _, riding in
             if riding { selection = .ride }

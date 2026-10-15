@@ -40,7 +40,7 @@ struct MigrationTests {
         }
 
         // Open it with the current schema and migration plan, as the updated app does.
-        let schema = Schema(versionedSchema: RideTrackerSchemaV2.self)
+        let schema = Schema(versionedSchema: RideTrackerSchemaCurrent.self)
         let container = try ModelContainer(
             for: schema,
             migrationPlan: RideTrackerMigrationPlan.self,
@@ -66,5 +66,55 @@ struct MigrationTests {
         context.insert(song)
         try context.save()
         #expect(ride.soundtrack.map(\.title) == ["Safarnama"])
+        #expect(!ride.sharedWithFriends)
+    }
+
+    /// v1.1.0 stores (with songs) must keep everything and start out private when friends arrive.
+    @Test func v2StoreOpensWithCurrentSchema() throws {
+        let folder = URL.temporaryDirectory.appending(path: "migration-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appending(path: "rides.store")
+        let rideID = UUID()
+
+        do {
+            let schema = Schema(versionedSchema: RideTrackerSchemaV2.self)
+            let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none))
+            let context = ModelContext(container)
+            let ride = RideTrackerSchemaV2.Ride()
+            ride.id = rideID
+            ride.name = "Murthal run"
+            let link = RideTrackerSchemaV2.MediaLink()
+            link.localIdentifier = "ASSET-1"
+            link.ride = ride
+            let song = RideTrackerSchemaV2.PlayedSong()
+            song.title = "Safarnama"
+            song.ride = ride
+            context.insert(ride)
+            context.insert(link)
+            context.insert(song)
+            try context.save()
+        }
+
+        let schema = Schema(versionedSchema: RideTrackerSchemaCurrent.self)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: RideTrackerMigrationPlan.self,
+            configurations: ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)
+        )
+        let context = ModelContext(container)
+        let ride = try #require(try context.fetch(FetchDescriptor<Ride>()).first)
+        #expect(ride.id == rideID)
+        #expect(ride.soundtrack.map(\.title) == ["Safarnama"])
+        #expect(!ride.sharedWithFriends)
+        #expect(ride.sharedAt == nil)
+        let link = try #require(ride.media?.first)
+        #expect(link.localIdentifier == "ASSET-1")
+        #expect(!link.sharedWithFriends)
+
+        ride.sharedWithFriends = true
+        link.sharedWithFriends = true
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<Ride>()).first?.sharedWithFriends == true)
     }
 }

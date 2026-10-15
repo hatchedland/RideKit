@@ -169,6 +169,10 @@ struct RideNamingTests {
         #expect(resolve("", ["Ride · 12 Oct 2026", "Ride · 12 Oct 2026 (2)"]) == "Ride · 12 Oct 2026 (3)")
     }
 
+    @Test func alreadyDatedNameIsNotDatedTwice() {
+        #expect(resolve("Some other · 12 Oct 2026", ["Some other · 12 Oct 2026"]) == "Some other · 12 Oct 2026 (2)")
+    }
+
     @Test func slashesAreReplaced() {
         #expect(resolve("Delhi/Agra") == "Delhi-Agra")
     }

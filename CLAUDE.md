@@ -33,7 +33,16 @@ Setup and release checklist: [README.md](README.md).
   as spots ("Save as spot"). Photos without GPS go into the trail by capture time but **never get a
   map pin**.
 - **Bikes and scooters only.** No car mode or vehicle type.
-- **App Store release target.** No backend, no accounts: SwiftData + CloudKit private database only.
+- **App Store release target.** No backend, no accounts: SwiftData + CloudKit (private database for
+  the rider's data, **CloudKit sharing for Friends**). No servers of our own, ever.
+- **Friends (decided 2026-10-15)**: each rider shares one CloudKit zone ("Friends") with people they
+  invite — friends-only, nothing public, iPhone-only. Sharing is one-way (invite back to see theirs).
+  Friends see shared rides (route, stops, songs, **only photos the rider picked**) and can follow a
+  ride **live** (~1 update/min, chosen on the Start sheet, ends at End or after 12 h). The **first and
+  last 500 m** of every shared ride and everything in **privacy zones** are never shared, live included.
+  Shared photos are the one exception to "never copied": 2048 px JPEG copies of the chosen photos only.
+  Nothing social on the riding screen beyond a passive "Live" chip; no comments or likes. Every
+  friend's stop has **Add to my wishlist** — that's the point of the feature. Not in the Personal build.
 
 ## Tech constraints
 
@@ -44,7 +53,8 @@ Setup and release checklist: [README.md](README.md).
 - **SwiftData models must stay CloudKit-compatible**: no `@Attribute(.unique)`, every property has a
   default or is optional, every relationship optional. Schema changes are **additive only** and go
   through a new `VersionedSchema` + `SchemaMigrationPlan` (see `RideTracker/Models/Schema.swift`).
-  Released versions are **frozen as nested model copies** (V1 = v1.0.0; V2 adds `PlayedSong`); the
+  Released versions are **frozen as nested model copies** (V1 = v1.0.0; V2 adds `PlayedSong`; V3 adds
+  `Ride.sharedWithFriends`/`sharedAt` and `MediaLink.sharedWithFriends`); the
   top-level models are always the latest. Every schema change needs a migration test from the previous
   version (see `RideTrackerTests/MigrationTests.swift`).
 - A ride's track is **one compressed blob** (`TrackCodec`), never one row per GPS point.
@@ -69,10 +79,10 @@ Setup and release checklist: [README.md](README.md).
 
 | Path | Purpose |
 |---|---|
-| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links |
-| `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1 frozen, V2 current) |
-| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AppSettings` |
-| `RideTracker/Features` | SwiftUI screens: Record, Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Settings |
+| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`) |
+| `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
+| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `FriendsService` + `FriendsCloud` (CloudKit sharing), `AppSettings` |
+| `RideTracker/Features` | SwiftUI screens: Record, Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |
 | `design` | `make-icon.swift` (renders the app icon) |

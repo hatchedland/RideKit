@@ -32,6 +32,12 @@ final class Ride {
     /// Songs from Apple Music played during the ride (added in schema V2).
     @Relationship(deleteRule: .cascade, inverse: \PlayedSong.ride) var songs: [PlayedSong]? = []
 
+    /// Friends can see this ride (added in schema V3). Set at Start or later from ride detail;
+    /// the ride is published when it ends.
+    var sharedWithFriends: Bool = false
+    /// When friends last got an up-to-date copy, `nil` if never.
+    var sharedAt: Date?
+
     init(id: UUID, name: String, startedAt: Date) {
         self.id = id
         self.name = name
