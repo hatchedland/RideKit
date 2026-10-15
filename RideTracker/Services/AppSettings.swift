@@ -11,6 +11,10 @@ enum AppSettings {
         static let spotRadius = "settings.spotRadius"
         static let hasSeenSafetyNotice = "settings.hasSeenSafetyNotice"
         static let trackSongs = "settings.trackSongs"
+        static let riderName = "settings.friends.riderName"
+        static let shareRidesByDefault = "settings.friends.shareRidesByDefault"
+        static let hideRideEnds = "settings.friends.hideRideEnds"
+        static let privacyZones = "settings.friends.privacyZones"
     }
 
     enum Units: String, CaseIterable, Identifiable {
@@ -52,6 +56,32 @@ enum AppSettings {
     /// Log songs played in the Music app during rides.
     static var trackSongs: Bool {
         defaults.object(forKey: Key.trackSongs) as? Bool ?? true
+    }
+
+    // MARK: Friends
+
+    /// How friends see the rider, e.g. "Rajan". Empty: the iCloud name is used.
+    static var riderName: String { defaults.string(forKey: Key.riderName) ?? "" }
+
+    /// New rides start with "Share with friends" on (still changeable on the Start sheet).
+    static var shareRidesByDefault: Bool { defaults.bool(forKey: Key.shareRidesByDefault) }
+
+    /// Cut the first and last 500 m of every shared ride. On by default.
+    static var hideRideEnds: Bool {
+        defaults.object(forKey: Key.hideRideEnds) as? Bool ?? true
+    }
+
+    static var privacyZones: [PrivacyZone] {
+        get {
+            guard let data = defaults.data(forKey: Key.privacyZones) else { return [] }
+            return (try? JSONDecoder().decode([PrivacyZone].self, from: data)) ?? []
+        }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: Key.privacyZones) }
+    }
+
+    /// What friends may see of any ride, from the settings above.
+    static var sharePrivacy: SharePrivacy {
+        SharePrivacy(zones: privacyZones, endTrim: hideRideEnds ? SharePrivacy.defaultEndTrim : 0)
     }
 
     /// Radius for attaching photos to spots and for wishlist auto-visit.

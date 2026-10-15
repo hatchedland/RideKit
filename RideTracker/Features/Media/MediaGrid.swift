@@ -173,14 +173,14 @@ private struct AssetVideo: View {
 enum PhotoImages {
     private static let manager = PHCachingImageManager()
 
-    static func image(for localIdentifier: String, size: CGSize) async -> UIImage? {
+    static func image(for localIdentifier: String, size: CGSize, contentMode: PHImageContentMode = .aspectFill) async -> UIImage? {
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject else { return nil }
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.isNetworkAccessAllowed = true
         options.resizeMode = .fast
         return await withCheckedContinuation { continuation in
-            manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options) { image, _ in
+            manager.requestImage(for: asset, targetSize: size, contentMode: contentMode, options: options) { image, _ in
                 continuation.resume(returning: image)
             }
         }

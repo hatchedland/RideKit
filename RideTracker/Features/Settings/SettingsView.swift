@@ -53,6 +53,8 @@ struct SettingsView: View {
                     Text("Keeps a soundtrack of each ride: songs you play in the Music app for at least 30 seconds. Other apps like Spotify can't be read by iOS apps.")
                 }
 
+                FriendsSettingsSection()
+
                 Section {
                     if let kmlURL {
                         ShareLink(item: kmlURL) {
@@ -66,7 +68,7 @@ struct SettingsView: View {
                 }
 
                 Section("Privacy") {
-                    Text("Your rides, spots and photo links stay on your devices and in your own iCloud. Ride Tracker has no servers and no account.")
+                    Text("Your rides, spots and photo links stay on your devices and in your own iCloud. Ride Tracker has no servers and no account. Rides you share with friends go to them through iCloud sharing, with private places removed.")
                         .font(.footnote)
                     Button("Open iPhone Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }

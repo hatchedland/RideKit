@@ -16,6 +16,8 @@ final class MediaLink {
     var longitude: Double?
     /// The rider placed this item by hand; automatic matching won't move it.
     var isManual: Bool = false
+    /// The rider chose to share this item with friends (added in schema V3). Only these are copied.
+    var sharedWithFriends: Bool = false
 
     var spot: Spot?
     var ride: Ride?

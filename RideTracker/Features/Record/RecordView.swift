@@ -84,6 +84,8 @@ struct StartRideSheet: View {
     var wishlistNames: [String]
 
     @State private var name = ""
+    @State private var shareWithFriends = AppSettings.shareRidesByDefault
+    @State private var shareLive = false
     @State private var error: String?
     @FocusState private var focused: Bool
 
@@ -109,8 +111,20 @@ struct StartRideSheet: View {
                     }
                 }
 
+                // Decided here, before moving: nothing on the riding screen asks for attention.
+                if recorder.friends.availability == .available {
+                    Section {
+                        Toggle("Share with friends after the ride", isOn: $shareWithFriends)
+                        Toggle("Let friends follow live", isOn: $shareLive)
+                    } footer: {
+                        Text(shareLive
+                             ? "Friends see where you are about once a minute until you end the ride. Your start and privacy zones stay hidden."
+                             : "Photos are never shared automatically; pick them after the ride.")
+                    }
+                }
+
                 if let error {
-                    Section { Text(error).foregroundStyle(.red) }
+                    Section { Text(error).foregroundStyle(Brand.signal) }
                 }
             }
             .navigationTitle("New ride")
@@ -132,7 +146,7 @@ struct StartRideSheet: View {
     private func start() {
         Task {
             do {
-                try await recorder.start(name: name)
+                try await recorder.start(name: name, shareWithFriends: shareWithFriends, shareLive: shareLive)
                 dismiss()
             } catch {
                 self.error = "Couldn't start the ride: \(error.localizedDescription)"

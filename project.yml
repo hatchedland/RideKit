@@ -76,6 +76,8 @@ targets:
         NSAppleMusicUsageDescription: >-
           Ride Tracker keeps a list of the songs you play in the Music app during a ride, so you can
           see and replay each ride's soundtrack.
+        # Friend invitations are CloudKit shares; iOS opens them in this app.
+        CKSharingSupported: true
         LSApplicationQueriesSchemes:
           - comgooglemaps
         ITSAppUsesNonExemptEncryption: false

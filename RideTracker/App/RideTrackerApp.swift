@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct RideTrackerApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let container: ModelContainer
     @State private var recorder: RideRecorder
 
