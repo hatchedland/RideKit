@@ -17,9 +17,13 @@ A native iOS app for motorcycle and scooter rides, built around **places**:
   original file, or jump to the Photos app.
 - **Ride soundtrack.** Songs you play in the Music app during a ride (30 s or more) are logged with
   when and where they played. Open them in Apple Music or share the list.
+- **Friends.** Invite your riding group. See the rides they share (route, stops, the photos they
+  picked, soundtrack), follow a friend's ride live, and add any of their stops to your wishlist. The
+  start, the end and your privacy zones are never shared. Needs iCloud, so not in the Personal build.
 
 No backend and no account. Data stays on the device and syncs through the user's own iCloud
-(SwiftData + CloudKit). See [PLAN.md](PLAN.md) for the full product plan.
+(SwiftData + CloudKit). Friends use CloudKit sharing: each rider shares one iCloud zone with the
+people they invite. See [PLAN.md](PLAN.md) for the full product plan.
 
 **Look:** the *Milestone* brand, after the Indian highway km-stone: highway yellow, asphalt and chalk,
 wide signboard numbers, and a dark "instrument cluster" riding screen. The rules live in
@@ -100,8 +104,9 @@ Xcode. It's a stopgap: see the comments in the script for what it can and can't 
 ## Before App Store submission
 
 - [ ] Set the team and confirm the bundle IDs (`com.hatchedland.ridetracker` and `.widgets`) and the iCloud container (`iCloud.com.hatchedland.ridetracker`)
-- [ ] In the CloudKit Console, deploy the schema to **Production** after the first full test (it can't be changed destructively afterwards)
+- [ ] In the CloudKit Console, deploy the schema to **Production** after the first full test (it can't be changed destructively afterwards). It must include the Friends record types `SharedRide` and `LiveRide`, created by sharing one ride and one live ride from a development build
+- [ ] Test Friends with **two Apple IDs on two devices**: invite, accept, share a ride with photos, live ride, "Stop seeing", and removing a participant under "Who sees my rides"
 - [ ] Publish a privacy policy page and add its URL in App Store Connect
-- [ ] App Privacy: location and photos are used on device only, not linked to the user, not used for tracking
+- [ ] App Privacy: location and photos stay in the user's iCloud; **rides shared with friends** (route, stops, chosen photos, live position) go only to people the user invited through iCloud sharing. Not linked to the user by us, not used for tracking
 - [ ] App Review notes: background location records the ride route, and full Photos access builds the ride album. Attach a short screen recording
 - [ ] Decide the App Store name (shortlist in [PLAN.md](PLAN.md) §11) and check the km-stone icon at small sizes
