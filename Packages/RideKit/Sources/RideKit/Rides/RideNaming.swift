@@ -23,7 +23,9 @@ public enum RideNaming {
         let base = trimmed.isEmpty ? "Ride · \(dateText)" : trimmed
         if !taken.contains(base.lowercased()) { return base }
 
-        let dated = trimmed.isEmpty ? base : "\(trimmed) · \(dateText)"
+        // A name that already ends with today's date (e.g. picked from suggestions) isn't dated twice.
+        let alreadyDated = trimmed.lowercased().hasSuffix(" · \(dateText)".lowercased())
+        let dated = trimmed.isEmpty || alreadyDated ? base : "\(trimmed) · \(dateText)"
         if !taken.contains(dated.lowercased()) { return dated }
 
         var counter = 2

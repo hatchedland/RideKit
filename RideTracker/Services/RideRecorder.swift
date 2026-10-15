@@ -29,6 +29,8 @@ final class RideRecorder {
     private(set) var spotsMarkedThisRide = 0
     /// Songs from Apple Music logged so far this ride.
     private(set) var songsThisRide = 0
+    /// Friends can follow this ride live (chosen on the Start sheet).
+    private(set) var isSharingLive = false
     private(set) var locationDenied = false
     private(set) var gpsUnavailable = false
     var banner: Banner?
@@ -49,6 +51,7 @@ final class RideRecorder {
     let spots: SpotService
     let organizer: MediaOrganizer
     let trailNamer: TrailNamer
+    let friends = FriendsService()
     private let location = LocationService()
     private let music = MusicService()
     private var songLog = SongLog()
@@ -81,7 +84,8 @@ final class RideRecorder {
 
     // MARK: - Start
 
-    func start(name input: String) async throws {
+    /// `shareWithFriends`: publish the ride for friends when it ends. `shareLive`: let friends follow it now.
+    func start(name input: String, shareWithFriends: Bool = AppSettings.shareRidesByDefault, shareLive: Bool = false) async throws {
         guard phase == .idle else { return }
         phase = .starting
         defer { if phase == .starting { phase = .idle } }
@@ -100,6 +104,7 @@ final class RideRecorder {
         var ride = ActiveRide(name: name, startedAt: startedAt)
         let model = Ride(id: ride.id, name: name, startedAt: startedAt)
         model.includeScreenshots = AppSettings.includeScreenshots
+        model.sharedWithFriends = shareWithFriends && friends.availability == .available
         context.insert(model)
 
         if photos.hasFullAccess, let albumID = try? await photos.createAlbum(named: name) {
@@ -111,6 +116,7 @@ final class RideRecorder {
 
         resetLiveState()
         active = ride
+        isSharingLive = shareLive && friends.availability == .available
         begin(rideName: name, startedAt: startedAt, resuming: false)
     }
 
@@ -157,7 +163,28 @@ final class RideRecorder {
             }
             liveActivity.update(activityState())
             checkNearbyWishlist(from: point)
+            publishLive()
         }
+    }
+
+    /// Sends the position to friends (throttled to about once a minute), and stops sharing on its
+    /// own after 12 hours.
+    private func publishLive() {
+        guard isSharingLive, let ride = active else { return }
+        if Date.now.timeIntervalSince(ride.startedAt) > LiveRide.maximumDuration {
+            stopSharingLive()
+            return
+        }
+        friends.updateLive(rideID: ride.id, rideName: ride.name, startedAt: ride.startedAt, track: track,
+                           distance: stats.distanceMeters, isPaused: isPaused)
+    }
+
+    /// Friends stop seeing this ride live. The ride itself keeps recording.
+    func stopSharingLive() {
+        guard isSharingLive else { return }
+        isSharingLive = false
+        friends.endLive()
+        liveActivity.update(activityState(), force: true)
     }
 
     /// Saves the current location as a spot. Returns the name shown in the confirmation,
@@ -198,6 +225,7 @@ final class RideRecorder {
             startLocation()
         }
         liveActivity.update(activityState(), force: true)
+        publishLive()
     }
 
     private func checkNearbyWishlist(from point: TrackPoint) {
@@ -289,6 +317,7 @@ final class RideRecorder {
     private func finish(_ ride: ActiveRide, points: [TrackPoint], endedAt: Date) async {
         phase = .finishing
         stopMusicLog(at: endedAt)
+        stopSharingLive()
         location.stop()
         photos.stopObserving()
         sweepTask?.cancel()
@@ -325,6 +354,13 @@ final class RideRecorder {
         active = nil
         phase = .idle
         finishedRideID = model.id
+
+        if model.sharedWithFriends {
+            Task {
+                await friends.publish(model)
+                try? context.save()
+            }
+        }
     }
 
     // MARK: - Recovery
@@ -335,6 +371,9 @@ final class RideRecorder {
         interruptedRide = nil
         resetLiveState()
         active = ride
+        // Live sharing isn't resumed after a crash: the rider re-enables it consciously.
+        isSharingLive = false
+        friends.endLive()
         track = recoveredPoints
         recoveredPoints.forEach { stats.add($0) }
         stats.breakSegment()
@@ -399,6 +438,10 @@ final class RideRecorder {
         if let albumID = ride.albumLocalIdentifier {
             try? await photos.renameAlbum(albumID, to: name)
         }
+        if ride.sharedWithFriends, ride.sharedAt != nil {
+            await friends.publish(ride)
+            try? context.save()
+        }
         if active?.id == ride.id {
             active?.name = name
             if let active { try? buffer.updateMetadata(active) }
@@ -407,6 +450,7 @@ final class RideRecorder {
 
     /// Deletes the ride. The Photos album is deleted only if asked; photos are never deleted.
     func delete(_ ride: Ride, deleteAlbum: Bool) async {
+        if ride.sharedWithFriends { await friends.unpublish(ride) }
         if deleteAlbum, let albumID = ride.albumLocalIdentifier {
             try? await photos.deleteAlbum(albumID)
         }
@@ -452,7 +496,8 @@ final class RideRecorder {
             isPaused: isPaused,
             albumItemCount: albumItemCount,
             lastSpotName: nil,
-            usesMetric: AppSettings.usesMetric
+            usesMetric: AppSettings.usesMetric,
+            sharingLive: isSharingLive
         )
     }
 

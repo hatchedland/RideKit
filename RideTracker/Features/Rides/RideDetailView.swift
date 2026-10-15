@@ -72,6 +72,8 @@ struct RideDetailView: View {
 
             SoundtrackSection(ride: ride)
 
+            RideFriendsSection(ride: ride)
+
             Section("Notes") {
                 TextField("How was the ride?", text: $ride.notes, axis: .vertical)
                     .lineLimit(2...8)

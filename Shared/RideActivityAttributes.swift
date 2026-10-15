@@ -13,6 +13,8 @@ struct RideActivityAttributes: ActivityAttributes {
         var lastSpotName: String?
         /// Metric or imperial, chosen in the app's Settings.
         var usesMetric: Bool
+        /// Friends can follow the ride live. Optional so activities started by older versions still decode.
+        var sharingLive: Bool? = nil
     }
 
     var rideName: String
