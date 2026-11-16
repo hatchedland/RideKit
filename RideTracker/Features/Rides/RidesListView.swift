@@ -176,32 +176,45 @@ struct RideCard: View {
 struct DistanceStone: View {
     let meters: Double
 
+    /// The stone is a real 3D render (design/make-stone-3d.swift → Assets › DistanceStone); the
+    /// distance is written on its front face here. These are where that script reports the face
+    /// lands in the image (0–1) and how far the stone is turned.
+    private enum Face {
+        static let left = 0.039, right = 0.708
+        static let seam = 0.433, bottom = 0.872
+        static let yaw = Angle.radians(-0.42)
+    }
+
     var body: some View {
         let distance = Format.distanceParts(meters)
         GeometryReader { geo in
-            let capHeight = geo.size.height * 0.42
-            ZStack(alignment: .top) {
-                MilestoneShape().fill(Brand.chalk)
-                MilestoneShape()
-                    .fill(Brand.highwayYellow)
-                    .mask(alignment: .top) { Rectangle().frame(height: capHeight) }
-                MilestoneShape().stroke(Brand.asphalt.opacity(0.85), lineWidth: 1.5)
-                VStack(spacing: 0) {
+            let w = geo.size.width, h = geo.size.height
+            let centerX = w * (Face.left + Face.right) / 2
+            let faceWidth = w * (Face.right - Face.left)
+            ZStack(alignment: .topLeading) {
+                Image("DistanceStone")
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: w, height: h)
+                Group {
                     Text(distance.unit)
-                        .font(.caption2.weight(.heavy).width(.expanded))
-                        .frame(height: capHeight)
-                        .padding(.top, geo.size.width * 0.12)
+                        .font(.system(size: h * 0.105, weight: .heavy).width(.expanded))
+                        .frame(width: faceWidth)
+                        .position(x: centerX, y: h * 0.345)
                     Text(distance.value)
-                        .font(.system(size: 20, weight: .heavy).width(.expanded))
+                        .font(.system(size: h * 0.2, weight: .heavy).width(.expanded))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .padding(.horizontal, 4)
-                        .frame(maxHeight: .infinity)
+                        .minimumScaleFactor(0.4)
+                        .frame(width: faceWidth * 0.88)
+                        .position(x: centerX, y: h * (Face.seam + Face.bottom) / 2)
                 }
-                .foregroundStyle(Brand.asphalt)
+                .foregroundStyle(Brand.asphalt.opacity(0.92))
+                // Turned with the stone, so the paint sits on its face rather than floating in front.
+                .rotation3DEffect(Face.yaw, axis: (x: 0, y: 1, z: 0), anchor: UnitPoint(x: Face.left, y: 0.5), perspective: 0.4)
             }
         }
+        .aspectRatio(420.0 / 540.0, contentMode: .fit)
         .accessibilityHidden(true)
     }
 }
