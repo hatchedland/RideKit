@@ -6,6 +6,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.openURL) private var openURL
+    @Environment(AccountService.self) private var account
+    @Environment(SyncService.self) private var sync
 
     @AppStorage(AppSettings.Key.autoPause) private var autoPause = AutoPauseDetector.Sensitivity.normal.rawValue
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
@@ -48,6 +50,23 @@ struct SettingsView: View {
                 }
 
                 FriendsSettingsSection()
+
+                if case .signedIn(let email) = account.state {
+                    Section("Account") {
+                        LabeledContent("Signed in as", value: email)
+                        LabeledContent("Rides, spots & photo details") {
+                            switch sync.status {
+                            case .idle: Text("Not synced yet")
+                            case .syncing: HStack(spacing: 6) { ProgressView(); Text("Syncing…") }
+                            case .synced(let date): Text("Synced \(date.formatted(.relative(presentation: .named)))")
+                            case .failed(let reason): Text(reason).foregroundStyle(Brand.signal)
+                            }
+                        }
+                        Button("Sync now") { Task { await sync.sync() } }
+                            .disabled(sync.status == .syncing)
+                        Button("Sign out", role: .destructive) { Task { await account.signOut() } }
+                    }
+                }
 
                 Section("Privacy") {
                     Text("Your rides, spots and photo links stay on your devices and in your own iCloud. Ride Tracker has no servers and no account. Rides you share with friends go to them through iCloud sharing, with private places removed.")

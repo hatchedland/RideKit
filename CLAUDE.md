@@ -51,8 +51,12 @@ Setup and release checklist: [README.md](README.md).
   as spots ("Save as spot"). Photos without GPS go into the trail by capture time but **never get a
   map pin**.
 - **Bikes and scooters only.** No car mode or vehicle type.
-- **App Store release target.** No backend, no accounts: SwiftData + CloudKit (private database for
-  the rider's data, **CloudKit sharing for Friends**). No servers of our own, ever.
+- **App Store release target. Account required, everything in Supabase (decided 2026-11-16).** The app
+  opens on sign-in; nothing (riding included, Siri/Action button too) works signed out. Every ride
+  (stats, destination, notes, track file), spot, photo/video **metadata** link and played song syncs to
+  the rider's Supabase project data (`supabase/migrations`, row-level security per rider). Photo and
+  video files stay in Photos (only picked friend photos are copied). Offline-first: SwiftData on the
+  phone records with no signal and syncs later. CloudKit is being removed (Friends moves to Supabase).
 - **Friends (decided 2026-10-15)**: each rider shares one CloudKit zone ("Friends") with people they
   invite — friends-only, nothing public, iPhone-only. Sharing is one-way (invite back to see theirs).
   Friends see shared rides (route, stops, songs, **only photos the rider picked**) and can follow a
@@ -64,8 +68,12 @@ Setup and release checklist: [README.md](README.md).
 
 ## Tech constraints
 
-- iOS 26+, Swift 6 strict concurrency, SwiftUI. **Apple frameworks only — the one exception is the
-  Google Maps SDK for iOS** (SPM, pinned in `project.yml`). No other third-party dependencies.
+- iOS 26+, Swift 6 strict concurrency, SwiftUI. **Apple frameworks only — the exceptions are the
+  Google Maps SDK for iOS and supabase-swift** (SPM, pinned in `project.yml`). No other third-party
+  dependencies. Supabase host + publishable key live in git-ignored `Config/Secrets.xcconfig`.
+- **Accounts (decided 2026-11-16): Supabase Auth, passwordless email link** (`AccountService`,
+  `ridetracker://auth-callback`). Free projects can't customise the default email template, so the
+  6-digit code waits for an own SMTP sender (before App Store). Signed out, only the sign-in screen shows.
 - Always the latest non-deprecated APIs, e.g. `CLLocationUpdate.liveUpdates` + `CLServiceSession` +
   `CLBackgroundActivitySession` (only "When In Use" permission — never ask for "Always"),
   `MKReverseGeocodingRequest` (not `CLGeocoder`), `MKMapItem.location` / `.address` (not `placemark`).
