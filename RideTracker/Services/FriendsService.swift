@@ -17,13 +17,14 @@ final class FriendsService {
     }
 
     private(set) var availability: Availability = .checking
-    /// People who see your rides.
-    private(set) var followers: [Follower] = []
+    /// Friend requests to and from you.
+    private(set) var requests: [FriendRequest] = []
+    var incomingRequests: [FriendRequest] { requests.filter(\.incoming) }
     private(set) var friends: [FriendSnapshot] = []
     private(set) var isRefreshing = false
     private(set) var lastRefresh: Date?
     private(set) var lastError: String?
-    /// Name of a friend whose invitation was just accepted, for the "share back" prompt.
+    /// Name of a rider who just became a friend, for a short confirmation.
     var justAccepted: String?
 
     private var liveThrottle = LivePublishThrottle()
@@ -78,7 +79,7 @@ final class FriendsService {
         defer { isRefreshing = false }
         do {
             friends = try await backend.fetchFriends()
-            followers = try await backend.followers()
+            requests = try await backend.requests()
             lastRefresh = .now
             lastError = nil
         } catch {
@@ -86,57 +87,57 @@ final class FriendsService {
         }
     }
 
-    // MARK: Invitations
+    // MARK: Finding riders and requests
 
-    func lastErrorFromInvite() {
-        lastError = "Couldn't make an invite. Check your connection and try again."
+    /// Riders whose @handle starts with `query` (at least two characters).
+    func search(_ query: String) async -> [RiderResult] {
+        guard let backend, AccountService.normalisedHandle(query).count >= 2 else { return [] }
+        return (try? await backend.search(query)) ?? []
     }
 
-    /// A message to send through the share sheet: a link that opens the app, and the code itself for
-    /// apps that don't make `ridetracker://` links tappable.
-    func inviteMessage() async throws -> String {
-        guard let backend else { throw URLError(.userAuthenticationRequired) }
-        let code = try await backend.createInvite()
-        let name = AppSettings.riderName
-        return """
-        \(name.isEmpty ? "Ride" : "\(name) wants to ride") with you on Ride Tracker 🏍️
-        Tap to see my rides: \(InviteCode.link(code).absoluteString)
-        Or open Ride Tracker › Friends › Paste invite. Code: \(code)
-        (valid for 7 days)
-        """
+    /// Where a found rider stands with you, for the button next to them.
+    enum Relationship { case friend, requested, wantsToBeFriends, none }
+
+    func relationship(with rider: UUID) -> Relationship {
+        if friends.contains(where: { $0.id == rider.uuidString }) { return .friend }
+        if let request = requests.first(where: { $0.riderID == rider }) { return request.incoming ? .wantsToBeFriends : .requested }
+        return .none
     }
 
-    /// Accepts an invite from a link or a pasted message.
-    func acceptInvite(from text: String) async {
-        guard let code = InviteCode.find(in: text) else {
-            lastError = "There's no invite code in that. Ask your friend to send the invite again."
-            return
-        }
-        guard let backend else { return }
+    func sendRequest(to rider: RiderResult) async {
         do {
-            justAccepted = try await backend.acceptInvite(code)
+            try await backend?.sendRequest(to: rider.id)
+            requests.append(FriendRequest(id: UUID(), riderID: rider.id, name: rider.displayName, username: rider.username, incoming: false))
             lastError = nil
             await refresh()
         } catch {
-            lastError = "That invite has expired or was already used. Ask your friend for a new one."
+            lastError = "Couldn't send the request. Try again."
         }
     }
 
-    /// Stop seeing a friend's rides. They keep seeing yours until you remove them from your followers.
-    func leave(_ friend: FriendSnapshot) async {
+    func accept(_ request: FriendRequest) async {
         do {
-            try await backend?.leave(friendID: friend.id)
-            friends.removeAll { $0.id == friend.id }
+            try await backend?.accept(request)
+            justAccepted = request.name
+            lastError = nil
+            await refresh()
         } catch {
-            lastError = Self.message(for: error)
+            lastError = "That request is no longer there."
+            await refresh()
         }
     }
 
-    /// Stop someone seeing your rides.
-    func removeFollower(_ follower: Follower) async {
+    /// Declines an incoming request or cancels one you sent.
+    func dismiss(_ request: FriendRequest) async {
+        requests.removeAll { $0.id == request.id }
+        try? await backend?.dismiss(request)
+    }
+
+    /// Ends a friendship both ways: neither of you sees the other's rides any more.
+    func unfriend(_ friend: FriendSnapshot) async {
         do {
-            try await backend?.removeFollower(follower)
-            followers.removeAll { $0.id == follower.id }
+            try await backend?.unfriend(friend.id)
+            friends.removeAll { $0.id == friend.id }
         } catch {
             lastError = Self.message(for: error)
         }

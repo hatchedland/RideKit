@@ -23,6 +23,17 @@ final class AccountService {
 
     private(set) var state: State = .checking
     private(set) var error: String?
+    /// The rider's name and @handle, once loaded after sign-in.
+    private(set) var profile: Profile?
+
+    struct Profile: Equatable, Decodable {
+        var username: String?
+        var displayName: String
+        enum CodingKeys: String, CodingKey { case username, displayName = "display_name" }
+    }
+
+    /// Signed in but no @handle yet: the app asks for one before anything else.
+    var needsHandle: Bool { isSignedIn && profile != nil && (profile?.username ?? "").isEmpty }
 
     /// `nil` when the app was built without a Supabase project (see Config/Secrets.example.xcconfig).
     let client: SupabaseClient?
@@ -52,6 +63,7 @@ final class AccountService {
             // The SDK refreshes an expired access token itself, so a session means signed in.
             if let email = session?.user.email {
                 state = .signedIn(email: email)
+                if profile == nil { await loadProfile() }
             } else if case .linkSent = state {
                 // Still waiting for the rider to tap the link.
             } else {
@@ -90,8 +102,44 @@ final class AccountService {
         return true
     }
 
+    func loadProfile() async {
+        guard let client, let id = try? await client.auth.session.user.id else { return }
+        profile = try? await client.from("profiles").select("username, display_name").eq("id", value: id).single().execute().value
+        if let name = profile?.displayName, !name.isEmpty { AppSettings.riderName = name }
+    }
+
+    /// Saves name and @handle. Returns a message for the rider if it didn't work.
+    func saveProfile(name: String, handle input: String) async -> String? {
+        let handle = Self.normalisedHandle(input)
+        guard Self.isValidHandle(handle) else { return "Use 3–20 letters, numbers, _ or ." }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return "Add your name, so friends know it's you." }
+        guard let client, let id = try? await client.auth.session.user.id else { return "You're signed out." }
+        do {
+            try await client.from("profiles").update(["username": handle, "display_name": String(name.prefix(60))])
+                .eq("id", value: id).execute()
+            profile = Profile(username: handle, displayName: name)
+            AppSettings.riderName = name
+            return nil
+        } catch {
+            let text = String(describing: error).lowercased()
+            if text.contains("duplicate") || text.contains("unique") || text.contains("23505") { return "@\(handle) is taken. Try another." }
+            return (error as? URLError) != nil ? "No connection. Try again when you have signal." : "Couldn't save. Try again."
+        }
+    }
+
+    nonisolated static func normalisedHandle(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "@")).lowercased()
+    }
+
+    nonisolated static func isValidHandle(_ handle: String) -> Bool {
+        (3...20).contains(handle.count) && handle.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }
+            && handle == handle.lowercased()
+    }
+
     func signOut() async {
         try? await client?.auth.signOut()
+        profile = nil
         state = .signedOut
     }
 

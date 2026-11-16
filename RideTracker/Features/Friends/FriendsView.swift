@@ -6,9 +6,7 @@ import SwiftUI
 struct FriendsView: View {
     @Environment(RideRecorder.self) private var recorder
     @State private var confirmingLeave: FriendSnapshot?
-    @State private var inviteText: String?
-    @State private var preparingInvite = false
-    @State private var showingFollowers = false
+    @State private var showingFind = false
 
     private var friends: FriendsService { recorder.friends }
 
@@ -32,31 +30,22 @@ struct FriendsView: View {
                 .toolbar {
                     if friends.availability == .available {
                         ToolbarItem(placement: .primaryAction) {
-                            Menu {
-                                Button("Invite a friend", systemImage: "person.badge.plus", action: invite)
-                                Button("Paste invite", systemImage: "doc.on.clipboard", action: pasteInvite)
-                                Button("Who sees my rides", systemImage: "person.2") { showingFollowers = true }
-                            } label: {
-                                Label("Friends", systemImage: "person.badge.plus")
-                            }
+                            Button("Find riders", systemImage: "person.badge.plus") { showingFind = true }
                         }
                     }
                 }
-                .sheet(isPresented: Binding(get: { inviteText != nil }, set: { if !$0 { inviteText = nil } })) {
-                    if let inviteText { ShareSheet(items: [inviteText]).presentationDetents([.medium, .large]) }
-                }
-                .sheet(isPresented: $showingFollowers) { FollowersView() }
+                .sheet(isPresented: $showingFind) { FindRidersView() }
                 .confirmationDialog(
-                    "Stop seeing \(confirmingLeave?.name ?? "")’s rides?",
+                    "Remove \(confirmingLeave?.name ?? "") as a friend?",
                     isPresented: Binding(get: { confirmingLeave != nil }, set: { if !$0 { confirmingLeave = nil } }),
                     titleVisibility: .visible,
                     presenting: confirmingLeave
                 ) { friend in
-                    Button("Stop seeing their rides", role: .destructive) {
-                        Task { await friends.leave(friend) }
+                    Button("Remove friend", role: .destructive) {
+                        Task { await friends.unfriend(friend) }
                     }
                 } message: { _ in
-                    Text("They can still see your rides until you remove them under “Who sees my rides”.")
+                    Text("Neither of you will see the other's rides any more. You can send a new request any time.")
                 }
         }
         .task { await friends.refresh() }
@@ -69,22 +58,6 @@ struct FriendsView: View {
         }
     }
 
-    /// Makes a fresh invite and opens the share sheet with it.
-    private func invite() {
-        guard !preparingInvite else { return }
-        preparingInvite = true
-        Task {
-            defer { preparingInvite = false }
-            do { inviteText = try await friends.inviteMessage() } catch { friends.lastErrorFromInvite() }
-        }
-    }
-
-    /// Accepts an invite copied from WhatsApp, Messages or anywhere else.
-    private func pasteInvite() {
-        let text = UIPasteboard.general.string ?? ""
-        Task { await friends.acceptInvite(from: text) }
-    }
-
     @ViewBuilder
     private var content: some View {
         switch friends.availability {
@@ -93,7 +66,7 @@ struct FriendsView: View {
         case .signedOut:
             ContentUnavailableView("Signing in…", systemImage: "person.crop.circle")
         case .available:
-            if friends.friends.isEmpty {
+            if friends.friends.isEmpty && friends.requests.isEmpty {
                 emptyState
             } else {
                 list
@@ -105,21 +78,16 @@ struct FriendsView: View {
         ContentUnavailableView {
             Label("Ride with friends", systemImage: "person.2")
         } description: {
-            Text("Invite your riding group. You'll see the rides they share — where they stopped, what they shot — and can follow them live when they choose. Only people you invite see your rides.")
+            Text("Find your riding group by their @handle and send a friend request. Friends see each other's shared rides — where you stopped, what you shot — and can follow each other live.")
         } actions: {
-            Button(action: invite) {
-                HStack {
-                    if preparingInvite { ProgressView().tint(Brand.asphalt) }
-                    Text("Invite a friend")
-                }
-                .font(.headline)
-                .foregroundStyle(Brand.asphalt)
-                .padding(.horizontal, 8)
+            Button { showingFind = true } label: {
+                Text("Find riders")
+                    .font(.headline)
+                    .foregroundStyle(Brand.asphalt)
+                    .padding(.horizontal, 8)
             }
             .buttonStyle(.borderedProminent)
             .tint(Brand.highwayYellow)
-            .disabled(preparingInvite)
-            Button("Got an invite? Paste it", action: pasteInvite)
             if let error = friends.lastError {
                 Text(error).font(.footnote).foregroundStyle(Brand.signal)
             }
@@ -132,21 +100,19 @@ struct FriendsView: View {
         List {
             if let name = friends.justAccepted {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("You can now see \(name)’s rides.").font(.headline)
-                        Text("Sharing is one-way. Invite \(name) back so they can see yours.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        HStack {
-                            Button(action: invite) {
-                                Text("Invite \(name)").foregroundStyle(Brand.asphalt)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Brand.highwayYellow)
-                            Button("Not now") { friends.justAccepted = nil }
-                                .buttonStyle(.bordered)
-                        }
+                    HStack {
+                        Label("You and \(name) are now friends.", systemImage: "checkmark.seal.fill")
+                        Spacer()
+                        Button("OK") { friends.justAccepted = nil }.buttonStyle(.borderless)
                     }
-                    .padding(.vertical, 4)
+                }
+            }
+
+            if !friends.requests.isEmpty {
+                Section("Requests") {
+                    ForEach(friends.requests) { request in
+                        RequestRow(request: request)
+                    }
                 }
             }
 
@@ -188,7 +154,7 @@ struct FriendsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .swipeActions {
-                        Button("Stop seeing", role: .destructive) { confirmingLeave = friend }
+                        Button("Remove", role: .destructive) { confirmingLeave = friend }
                     }
                 }
             }
@@ -317,48 +283,103 @@ struct FilePhoto: View {
     }
 }
 
-/// The system share sheet for an invite message.
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
+/// An incoming request (Accept / Decline) or one you sent (Cancel).
+struct RequestRow: View {
+    @Environment(RideRecorder.self) private var recorder
+    let request: FriendRequest
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.name).font(.headline)
+                Text(request.incoming ? "@\(request.username) wants to be friends" : "@\(request.username) · request sent")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if request.incoming {
+                Button("Decline") { Task { await recorder.friends.dismiss(request) } }
+                    .buttonStyle(.bordered)
+                Button {
+                    Task { await recorder.friends.accept(request) }
+                } label: {
+                    Text("Accept").foregroundStyle(Brand.asphalt)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Brand.highwayYellow)
+            } else {
+                Button("Cancel") { Task { await recorder.friends.dismiss(request) } }
+                    .buttonStyle(.bordered)
+            }
+        }
+        .controlSize(.small)
     }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// "Who sees my rides": the people you invited. Removing someone stops them seeing your rides.
-struct FollowersView: View {
+/// Search riders by @handle and send friend requests, all inside the app.
+struct FindRidersView: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.dismiss) private var dismiss
-    @State private var removing: Follower?
+    @State private var query = ""
+    @State private var results: [RiderResult] = []
+    @State private var searching = false
 
     var body: some View {
         NavigationStack {
             List {
-                if recorder.friends.followers.isEmpty {
-                    ContentUnavailableView("Nobody yet", systemImage: "person.2",
-                                           description: Text("People you invite show up here. Only they see the rides you share."))
+                if AccountService.normalisedHandle(query).count < 2 {
+                    Text("Type at least two letters of their @handle.").foregroundStyle(.secondary)
+                } else if results.isEmpty && !searching {
+                    Text("No rider with a handle starting “@\(AccountService.normalisedHandle(query))”.").foregroundStyle(.secondary)
                 }
-                ForEach(recorder.friends.followers) { follower in
-                    Label(follower.name, systemImage: "person.crop.circle")
-                        .swipeActions {
-                            Button("Remove", role: .destructive) { removing = follower }
+                ForEach(results) { rider in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rider.displayName.isEmpty ? "Rider" : rider.displayName).font(.headline)
+                            Text("@\(rider.username)").font(.subheadline).foregroundStyle(.secondary)
                         }
+                        Spacer()
+                        action(for: rider)
+                    }
+                }
+                if let error = recorder.friends.lastError {
+                    Text(error).font(.footnote).foregroundStyle(Brand.signal)
                 }
             }
-            .navigationTitle("Who sees my rides")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "@handle")
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .navigationTitle("Find riders")
             .toolbarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .refreshable { await recorder.friends.refresh() }
-            .confirmationDialog("Stop \(removing?.name ?? "") seeing your rides?",
-                                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                                titleVisibility: .visible, presenting: removing) { follower in
-                Button("Remove \(follower.name)", role: .destructive) { Task { await recorder.friends.removeFollower(follower) } }
-            } message: { _ in
-                Text("Rides you've already shared disappear for them. Invite them again any time.")
+            .task(id: query) {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                searching = true
+                results = await recorder.friends.search(query)
+                searching = false
             }
+        }
+    }
+
+    @ViewBuilder
+    private func action(for rider: RiderResult) -> some View {
+        switch recorder.friends.relationship(with: rider.id) {
+        case .friend:
+            Label("Friends", systemImage: "checkmark").foregroundStyle(.secondary).font(.subheadline)
+        case .requested:
+            Text("Requested").foregroundStyle(.secondary).font(.subheadline)
+        case .wantsToBeFriends:
+            if let request = recorder.friends.requests.first(where: { $0.riderID == rider.id && $0.incoming }) {
+                Button {
+                    Task { await recorder.friends.accept(request) }
+                } label: { Text("Accept").foregroundStyle(Brand.asphalt) }
+                .buttonStyle(.borderedProminent).tint(Brand.highwayYellow).controlSize(.small)
+            }
+        case .none:
+            Button {
+                Task { await recorder.friends.sendRequest(to: rider) }
+            } label: { Text("Add friend").foregroundStyle(Brand.asphalt) }
+            .buttonStyle(.borderedProminent).tint(Brand.highwayYellow).controlSize(.small)
         }
     }
 }

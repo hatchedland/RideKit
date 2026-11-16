@@ -57,18 +57,20 @@ Setup and release checklist: [README.md](README.md).
   the rider's Supabase project data (`supabase/migrations`, row-level security per rider). Photo and
   video files stay in Photos (only picked friend photos are copied). Offline-first: SwiftData on the
   phone records with no signal and syncs later. CloudKit is being removed (Friends moves to Supabase).
-- **Friends (decided 2026-10-15, on Supabase since 2026-11-16)**: friends-only, nothing public,
-  iPhone-only. A rider invites someone with a code (`friend_invites`, shared as a
-  `ridetracker://invite/<code>` link plus the code for apps that don't make such links tappable —
-  "Paste invite" reads it from the clipboard). Sharing is one-way (`friend_shares`; invite back to see
-  theirs); "Who sees my rides" lists followers with Remove. Friends see **published copies**
-  (`shared_rides`, `shared_media`, bucket `shared`) — route, stops, songs, **only photos the rider
-  picked** — never the rider's own tables, and can follow a ride **live** (`live_rides`, ~1 update/min,
-  chosen on the Start sheet, ends at End or after 12 h). The **first and last 500 m** of every shared ride
-  and everything in **privacy zones** are never shared, live included; the destination never is.
-  Shared photos are the one exception to "never copied": 2048 px JPEG copies of the chosen photos only.
-  Nothing social on the riding screen beyond a passive "Live" chip; no comments or likes. Every
-  friend's stop has **Add to my wishlist** — that's the point of the feature. Works in every build.
+- **Friends (decided 2026-10-15; in-app requests, mutual, on Supabase since 2026-11-16)**: friends-only,
+  nothing public, iPhone-only. Every rider picks a unique **@handle** after the first sign-in
+  (`profiles.username`). Riders find each other **only inside the app** by @handle (`search_riders`:
+  handle + name, never email, ≥ 2 characters, max 10) and send a **friend request**
+  (`friend_requests`); accepting (`accept_friend_request`) makes them **friends both ways** — each sees
+  the other's shared rides and live rides. No invite links or codes. Remove friend ends it both ways.
+  Friends see **published copies** (`shared_rides`, `shared_media`, bucket `shared`) — route, stops,
+  songs, **only photos the rider picked** — never the rider's own tables, and can follow a ride
+  **live** (`live_rides`, ~1 update/min, chosen on the Start sheet, ends at End or after 12 h). The
+  **first and last 500 m** of every shared ride and everything in **privacy zones** are never shared,
+  live included; the destination never is. Shared photos are the one exception to "never copied":
+  2048 px JPEG copies of the chosen photos only. Nothing social on the riding screen beyond a passive
+  "Live" chip; no comments or likes. Every friend's stop has **Add to my wishlist** — that's the point
+  of the feature. Works in every build.
 
 ## Tech constraints
 

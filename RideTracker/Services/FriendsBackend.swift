@@ -20,13 +20,26 @@ struct FriendSnapshot: Identifiable, Sendable {
     }
 }
 
-/// Someone who sees your rides (you invited them).
-struct Follower: Identifiable, Sendable, Hashable {
+/// A rider found by @handle.
+struct RiderResult: Identifiable, Sendable, Hashable, Decodable {
     var id: UUID
-    var name: String
+    var username: String
+    var displayName: String
+    enum CodingKeys: String, CodingKey { case id, username, displayName = "display_name" }
 }
 
-/// Friends on Supabase: invites, who sees whose rides, published rides with their trimmed tracks and
+/// A pending friend request, to or from you.
+struct FriendRequest: Identifiable, Sendable, Hashable {
+    var id: UUID
+    /// The other rider.
+    var riderID: UUID
+    var name: String
+    var username: String
+    var incoming: Bool
+}
+
+/// Friends on Supabase: finding riders by @handle, friend requests (accepting makes friends both
+/// ways), published rides with their trimmed tracks and
 /// picked photos (bucket "shared"), and live rides. Row-level security in supabase/migrations makes
 /// sure friends only ever read published copies, never the rider's own tables.
 struct FriendsBackend: Sendable {
@@ -45,44 +58,53 @@ struct FriendsBackend: Sendable {
         try await client.from("profiles").update(["display_name": String(name.prefix(60))]).eq("id", value: me).execute()
     }
 
-    // MARK: Invites and follows
+    // MARK: Finding riders and friend requests
 
-    /// A fresh invite code (valid 7 days, one friend).
-    func createInvite() async throws -> String {
-        struct Invite: Decodable { var code: String }
-        let invite: Invite = try await client.from("friend_invites").insert([String: String](), returning: .representation)
-            .select("code").single().execute().value
-        return invite.code
+    func search(_ query: String) async throws -> [RiderResult] {
+        try await client.rpc("search_riders", params: ["query": query]).execute().value
     }
 
-    /// Accepts an invite; returns the inviter's name.
-    func acceptInvite(_ code: String) async throws -> String {
-        let owner: UUID = try await client.rpc("accept_friend_invite", params: ["invite_code": code]).execute().value
-        struct Profile: Decodable { var display_name: String }
-        let profile: Profile? = try? await client.from("profiles").select("display_name").eq("id", value: owner).single().execute().value
-        let name = profile?.display_name ?? ""
-        return name.isEmpty ? "your friend" : name
+    func sendRequest(to rider: UUID) async throws {
+        try await client.from("friend_requests").insert(["to_id": rider], returning: .minimal).execute()
     }
 
-    /// Stop seeing a friend's rides.
-    func leave(friendID: String) async throws {
+    /// Requests to and from you, with the other rider's name and handle.
+    func requests() async throws -> [FriendRequest] {
+        let me = try await me()
+        struct Row: Decodable { var id: UUID; var from_id: UUID; var to_id: UUID }
+        let rows: [Row] = try await client.from("friend_requests").select("id, from_id, to_id").execute().value
+        let others = rows.map { $0.from_id == me ? $0.to_id : $0.from_id }
+        let profiles = try await profiles(others)
+        return rows.map { row in
+            let other = row.from_id == me ? row.to_id : row.from_id
+            return FriendRequest(id: row.id, riderID: other, name: profiles[other]?.name ?? "Rider",
+                                 username: profiles[other]?.username ?? "", incoming: row.to_id == me)
+        }
+    }
+
+    /// Accepts a request; you're now friends both ways.
+    func accept(_ request: FriendRequest) async throws {
+        let _: UUID = try await client.rpc("accept_friend_request", params: ["request_id": request.id]).execute().value
+    }
+
+    /// Declines an incoming request or cancels one you sent.
+    func dismiss(_ request: FriendRequest) async throws {
+        try await client.from("friend_requests").delete().eq("id", value: request.id).execute()
+    }
+
+    /// Ends a friendship both ways.
+    func unfriend(_ friendID: String) async throws {
         let me = try await me()
         try await client.from("friend_shares").delete().eq("owner_id", value: friendID).eq("friend_id", value: me).execute()
+        try await client.from("friend_shares").delete().eq("owner_id", value: me).eq("friend_id", value: friendID).execute()
     }
 
-    /// People who see your rides.
-    func followers() async throws -> [Follower] {
-        let me = try await me()
-        struct Share: Decodable { var friend_id: UUID }
-        let shares: [Share] = try await client.from("friend_shares").select("friend_id").eq("owner_id", value: me).execute().value
-        let names = try await displayNames(shares.map(\.friend_id))
-        return shares.map { Follower(id: $0.friend_id, name: names[$0.friend_id] ?? "Rider") }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    func removeFollower(_ follower: Follower) async throws {
-        let me = try await me()
-        try await client.from("friend_shares").delete().eq("owner_id", value: me).eq("friend_id", value: follower.id).execute()
+    private func profiles(_ ids: [UUID]) async throws -> [UUID: (name: String, username: String)] {
+        guard !ids.isEmpty else { return [:] }
+        struct Profile: Decodable { var id: UUID; var display_name: String; var username: String? }
+        let rows: [Profile] = try await client.from("profiles").select("id, display_name, username")
+            .in("id", values: ids.map(\.uuidString)).execute().value
+        return Dictionary(uniqueKeysWithValues: rows.map { ($0.id, ($0.display_name.isEmpty ? "Rider" : $0.display_name, $0.username ?? "")) })
     }
 
     private func displayNames(_ ids: [UUID]) async throws -> [UUID: String] {
@@ -351,18 +373,5 @@ struct LiveRow: Codable, Sendable {
         LiveRide(rideID: rideID, rideName: rideName, startedAt: startedAt, updatedAt: updatedAt ?? startedAt,
                  position: Coordinate(latitude: latitude, longitude: longitude), distanceMeters: distanceMeters,
                  isPaused: isPaused, path: path)
-    }
-}
-
-/// Finds an invite code in a link (`ridetracker://invite/<code>`) or anywhere in a pasted message.
-enum InviteCode {
-    /// Codes are 32 hex characters; the first such word in the text is the code.
-    static func find(in text: String) -> String? {
-        let words = text.split { !$0.isLetter && !$0.isNumber }
-        return words.first { $0.count == 32 && $0.allSatisfy(\.isHexDigit) }.map { $0.lowercased() }
-    }
-
-    static func link(_ code: String) -> URL {
-        URL(string: "ridetracker://invite/\(code)")!
     }
 }

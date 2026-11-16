@@ -25,6 +25,8 @@ struct RootView: View {
             Brand.page.ignoresSafeArea()
         case .signedOut, .linkSent:
             SignInView()
+        case .signedIn where account.needsHandle:
+            HandleSetupView()
         case .signedIn:
             app
         }

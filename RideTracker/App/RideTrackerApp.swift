@@ -31,16 +31,8 @@ struct RideTrackerApp: App {
                 .environment(account)
                 .environment(sync)
                 // Sign-in links from email: ridetracker://auth-callback…
-                // Sign-in links (ridetracker://auth-callback…) and friend invites (ridetracker://invite/<code>).
-                .onOpenURL { url in
-                    Task {
-                        if url.host() == "invite" {
-                            await recorder.friends.acceptInvite(from: url.absoluteString)
-                        } else {
-                            await account.handle(url)
-                        }
-                    }
-                }
+                // Sign-in links from email: ridetracker://auth-callback…
+                .onOpenURL { url in Task { await account.handle(url) } }
                 .task { RideControl.isSignedIn = { [account] in account.isSignedIn } }
         }
         .modelContainer(container)

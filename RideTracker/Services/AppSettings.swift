@@ -42,7 +42,11 @@ enum AppSettings {
     // MARK: Friends
 
     /// How friends see the rider, e.g. "Rajan". Empty: the iCloud name is used.
-    static var riderName: String { defaults.string(forKey: Key.riderName) ?? "" }
+    /// The name friends see; kept in step with the account profile.
+    static var riderName: String {
+        get { defaults.string(forKey: Key.riderName) ?? "" }
+        set { defaults.set(newValue, forKey: Key.riderName) }
+    }
 
     /// New rides start with "Share with friends" on (still changeable on the Start sheet).
     static var shareRidesByDefault: Bool { defaults.bool(forKey: Key.shareRidesByDefault) }

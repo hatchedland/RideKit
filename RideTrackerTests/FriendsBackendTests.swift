@@ -5,24 +5,23 @@ import Testing
 
 @Suite("Friends on Supabase")
 struct FriendsBackendTests {
-    let code = "3f2a9c1e7b5d4e60a8c2f1d0b9e7a6c5"
-
     private func keys(_ row: some Encodable) throws -> Set<String> {
         let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any]
         return Set(try #require(object).keys)
     }
 
-    @Test func findsTheCodeInALinkOrAPastedMessage() {
-        #expect(InviteCode.find(in: "ridetracker://invite/\(code)") == code)
-        let whatsapp = """
-        Rajan wants to ride with you on Ride Tracker 🏍️
-        Tap to see my rides: ridetracker://invite/\(code)
-        Or open Ride Tracker › Friends › Paste invite. Code: \(code.uppercased())
-        """
-        #expect(InviteCode.find(in: whatsapp) == code)
-        #expect(InviteCode.find(in: "no code here, just a ride to Ooty") == nil)
-        #expect(InviteCode.find(in: "3f2a9c1e7b5d4e60") == nil) // too short
-        #expect(InviteCode.link(code).absoluteString == "ridetracker://invite/\(code)")
+    @Test(arguments: ["rajan", "rahul_rides", "a.b.c", "abc", "x1234567890123456789"])
+    func acceptsHandles(_ handle: String) {
+        #expect(AccountService.isValidHandle(handle))
+    }
+
+    @Test(arguments: ["ab", "Rajan", "has space", "émile", "toolongtoolongtoolong", "dash-ed", ""])
+    func rejectsHandles(_ handle: String) {
+        #expect(!AccountService.isValidHandle(handle))
+    }
+
+    @Test func handlesAreTypedLooselyAndStoredCleanly() {
+        #expect(AccountService.normalisedHandle("  @Rajan_Rides ") == "rajan_rides")
     }
 
     @Test func publishedRideMatchesTheSharedRidesTable() throws {
