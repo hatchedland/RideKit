@@ -39,4 +39,26 @@ final class MusicService {
         )
         return (song, player.playbackState == .playing)
     }
+
+    // MARK: Saving a ride's soundtrack
+
+    enum PlaylistError: Error { case notAllowed }
+
+    /// Saves the ride's songs as a playlist in the rider's Music library ("Ride Tracker · Vainaad")
+    /// and returns how many songs it holds. The same ride always maps to the same playlist, and songs
+    /// are only added the first time, so tapping again never duplicates them. Only Apple Music
+    /// catalog songs (with a store ID) can be added this way.
+    func savePlaylist(rideID: UUID, name: String, storeIDs: [String]) async throws -> Int {
+        if authorizationStatus == .notDetermined { await requestAccess() }
+        guard authorizationStatus == .authorized else { throw PlaylistError.notAllowed }
+        let metadata = MPMediaPlaylistCreationMetadata(name: "Ride Tracker · \(name)")
+        metadata.descriptionText = "Songs you played on this ride, saved by Ride Tracker."
+        let playlist = try await MPMediaLibrary.default().getPlaylist(with: rideID, creationMetadata: metadata)
+        guard playlist.items.isEmpty else { return playlist.items.count }
+        var seen = Set<String>()
+        for id in storeIDs where seen.insert(id).inserted {
+            try await playlist.addItem(withProductID: id)
+        }
+        return seen.count
+    }
 }

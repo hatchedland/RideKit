@@ -27,7 +27,11 @@ struct RideLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 6) {
                         Stat(label: "DISTANCE", value: Text(context.state.distanceText), alignment: .trailing)
-                        Stat(label: "TIME", value: RideTimer(startedAt: context.attributes.startedAt), alignment: .trailing)
+                        if let remaining = context.state.remainingText {
+                            Stat(label: "TO GO", value: Text(remaining), alignment: .trailing)
+                        } else {
+                            Stat(label: "TIME", value: RideTimer(startedAt: context.attributes.startedAt), alignment: .trailing)
+                        }
                     }
                     .padding(.trailing, 4)
                 }
@@ -57,7 +61,7 @@ struct RideLiveActivity: Widget {
 ///
 /// ```
 /// [km-stone] Ride name ................ [LIVE] [PAUSED] [📷 3]
-/// 42 KM/H              │ DISTANCE    TIME
+/// 42 KM/H              │ DISTANCE    TIME   (TO GO with a destination)
 ///                      │ 12.4 km     1:13:05
 /// [   📍  Mark spot   (yellow, 44 pt)   ] [ ⏸ ]
 /// ```
@@ -96,8 +100,15 @@ private struct LockScreenRideView: View {
                     .fill(Brand.chalk.opacity(0.18))
                     .frame(width: 1, height: 36)
                 Stat(label: "DISTANCE", value: Text(state.distanceText))
-                Stat(label: "TIME", value: RideTimer(startedAt: attributes.startedAt))
-                    .frame(minWidth: 72, alignment: .leading)
+                // Same width either way, so the card keeps its 160 pt Lock Screen height.
+                Group {
+                    if let remaining = state.remainingText {
+                        Stat(label: "TO GO", value: Text(remaining))
+                    } else {
+                        Stat(label: "TIME", value: RideTimer(startedAt: attributes.startedAt))
+                    }
+                }
+                .frame(minWidth: 72, alignment: .leading)
             }
             .frame(height: 48)
 

@@ -9,13 +9,17 @@ public struct ActiveRide: Codable, Equatable, Sendable {
     public var albumIdentifier: String?
     /// Spots marked during this ride (their IDs), so recovery can re-link them.
     public var spotIDs: [UUID]
+    /// Picked on the Start sheet; `nil` for "Just ride" and for buffers written by older versions.
+    public var destination: RideDestination?
 
-    public init(id: UUID = UUID(), name: String, startedAt: Date, albumIdentifier: String? = nil, spotIDs: [UUID] = []) {
+    public init(id: UUID = UUID(), name: String, startedAt: Date, albumIdentifier: String? = nil, spotIDs: [UUID] = [],
+                destination: RideDestination? = nil) {
         self.id = id
         self.name = name
         self.startedAt = startedAt
         self.albumIdentifier = albumIdentifier
         self.spotIDs = spotIDs
+        self.destination = destination
     }
 }
 

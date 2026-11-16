@@ -15,8 +15,19 @@ struct RideTrailRows: View {
 
     var body: some View {
         Group {
+            // The Start row is always there and owns the work. A modifier on the Group would run
+            // once per row, and never while the trail is still empty (an empty Group has no rows),
+            // which left the trail blank.
+            endpoint("Start", ride.startedAt)
+                .task(id: inputKey) {
+                    let built = buildTrail()
+                    trail = built
+                    await recorder.trailNamer.resolve(built.stops.filter { $0.kind == .cluster }.map(\.coordinate))
+                }
+                .fullScreenCover(item: $viewing) { link in
+                    MediaViewer(links: sortedMedia, initial: link)
+                }
             if let trail {
-                endpoint("Start", ride.startedAt)
                 ForEach(trail.stops.indices, id: \.self) { index in
                     leg(trail.legs[index])
                     stop(trail.stops[index])
@@ -26,14 +37,6 @@ struct RideTrailRows: View {
             }
         }
         .listRowSeparator(.hidden)
-        .task(id: inputKey) {
-            let built = buildTrail()
-            trail = built
-            await recorder.trailNamer.resolve(built.stops.filter { $0.kind == .cluster }.map(\.coordinate))
-        }
-        .fullScreenCover(item: $viewing) { link in
-            MediaViewer(links: sortedMedia, initial: link)
-        }
     }
 
     // MARK: Rows
@@ -102,9 +105,15 @@ struct RideTrailRows: View {
                     HStack(alignment: .firstTextBaseline) {
                         stopTitle(suggestion?.name ?? "Stop", suggested: suggestion != nil, stop: stop)
                         Spacer()
-                        Button("Save as spot", systemImage: "plus") { save(stop, suggestion: suggestion) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                        // A bookmark, as in Google Maps' Save: no text to wrap. Once saved, the stop's
+                        // milestone fills in and its title opens the spot.
+                        Button("Save as spot", systemImage: "bookmark") { save(stop, suggestion: suggestion) }
+                            .labelStyle(.iconOnly)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .background(.quaternary, in: .circle)
+                            .buttonStyle(.borderless)
+                            .help("Save as spot")
                     }
                 }
                 if !stop.mediaIDs.isEmpty { strip(stop.mediaIDs) }
@@ -112,6 +121,8 @@ struct RideTrailRows: View {
             .padding(.vertical, 8)
         }
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        // The row outlives the button, so it carries the "saved" haptic.
+        .sensoryFeedback(.success, trigger: spot != nil)
     }
 
     private func stopTitle(_ name: String, suggested: Bool, stop: Trail.Stop) -> some View {

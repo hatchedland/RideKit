@@ -1,4 +1,3 @@
-import CloudKit
 import Foundation
 import Observation
 import Photos
@@ -6,37 +5,40 @@ import RideKit
 import UIKit
 
 /// Friends: sharing your rides (and a ride in progress) with people you invite, and seeing theirs.
-/// Runs on CloudKit sharing (`FriendsCloud`): no accounts, no servers. Needs iCloud, so the free
-/// Personal build has no friends.
+/// Runs on the rider's Supabase account (`FriendsBackend`); works in every build, Personal included.
 @MainActor
 @Observable
 final class FriendsService {
     enum Availability: Equatable {
         case checking
         case available
-        /// Signed out of iCloud, or iCloud Drive restricted.
-        case needsICloud
-        /// The free Personal build has no iCloud entitlement.
-        case unsupportedBuild
+        /// No account yet (the app shows sign-in first, so this is brief).
+        case signedOut
     }
 
     private(set) var availability: Availability = .checking
+    /// Friend requests to and from you.
+    private(set) var requests: [FriendRequest] = []
+    var incomingRequests: [FriendRequest] { requests.filter(\.incoming) }
     private(set) var friends: [FriendSnapshot] = []
     private(set) var isRefreshing = false
     private(set) var lastRefresh: Date?
     private(set) var lastError: String?
-    /// Name of a friend whose invitation was just accepted, for the "share back" prompt.
+    /// Name of a rider who just became a friend, for a short confirmation.
     var justAccepted: String?
 
     private var liveThrottle = LivePublishThrottle()
     private var liveTask: Task<Void, Never>?
+    private var backend: FriendsBackend?
+    private weak var account: AccountService?
+    private weak var sync: SyncService?
 
-    static var isSupportedBuild: Bool {
-        #if PERSONAL_TEAM
-        false
-        #else
-        true
-        #endif
+    /// Connects friends to the rider's account (and to sync, so a ride exists in the account before
+    /// it's published). Called once at launch.
+    func configure(account: AccountService, sync: SyncService) {
+        self.account = account
+        self.sync = sync
+        backend = account.client.map(FriendsBackend.init)
     }
 
     /// Friends currently riding (live and not expired), newest first.
@@ -56,58 +58,88 @@ final class FriendsService {
 
     // MARK: Lifecycle
 
-    /// Checks iCloud, clears a live ride left behind by a crash, and loads friends.
+    /// Clears a live ride left behind by a crash, keeps the profile name current, and loads friends.
     func start(isRidingLive: Bool) async {
         await checkAvailability()
-        guard availability == .available else { return }
-        if !isRidingLive { try? await FriendsCloud.endLive() }
+        guard availability == .available, let backend else { return }
+        if !isRidingLive { try? await backend.endLive() }
+        let name = AppSettings.riderName
+        if !name.isEmpty { try? await backend.setDisplayName(name) }
         await refresh()
     }
 
     func checkAvailability() async {
-        guard Self.isSupportedBuild else {
-            availability = .unsupportedBuild
-            return
-        }
-        let status = try? await FriendsCloud.container.accountStatus()
-        availability = status == .available ? .available : .needsICloud
+        availability = account?.isSignedIn == true && backend != nil ? .available : .signedOut
     }
 
     func refresh() async {
-        guard availability == .available, !isRefreshing else { return }
+        if availability != .available { await checkAvailability() }
+        guard availability == .available, let backend, !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            friends = try await FriendsCloud.fetchFriends()
+            friends = try await backend.fetchFriends()
+            requests = try await backend.requests()
             lastRefresh = .now
             lastError = nil
+        } catch where Self.isCancellation(error) {
+            // The tab was rebuilt mid-load and SwiftUI cancelled the request; the next refresh
+            // follows straight away. Not a problem worth a red message.
         } catch {
             lastError = Self.message(for: error)
         }
     }
 
-    // MARK: Invitations
+    // MARK: Finding riders and requests
 
-    /// The share friends join through; the share sheet sends its link.
-    nonisolated static func inviteShare() async throws -> CKShare {
-        let name = await MainActor.run { AppSettings.riderName }
-        return try await FriendsCloud.share(title: name.isEmpty ? "My rides" : "\(name)’s rides")
+    /// Riders whose @handle starts with `query` (at least two characters).
+    func search(_ query: String) async -> [RiderResult] {
+        guard let backend, AccountService.normalisedHandle(query).count >= 2 else { return [] }
+        return (try? await backend.search(query)) ?? []
     }
 
-    func accept(_ metadata: CKShare.Metadata) async {
-        guard Self.isSupportedBuild else { return }
+    /// Where a found rider stands with you, for the button next to them.
+    enum Relationship { case friend, requested, wantsToBeFriends, none }
+
+    func relationship(with rider: UUID) -> Relationship {
+        if friends.contains(where: { $0.id == rider.uuidString }) { return .friend }
+        if let request = requests.first(where: { $0.riderID == rider }) { return request.incoming ? .wantsToBeFriends : .requested }
+        return .none
+    }
+
+    func sendRequest(to rider: RiderResult) async {
         do {
-            justAccepted = try await FriendsCloud.accept(metadata)
+            try await backend?.sendRequest(to: rider.id)
+            requests.append(FriendRequest(id: UUID(), riderID: rider.id, name: rider.displayName, username: rider.username, incoming: false))
+            lastError = nil
             await refresh()
         } catch {
-            lastError = Self.message(for: error)
+            lastError = "Couldn't send the request. Try again."
         }
     }
 
-    /// Stop seeing a friend's rides. They keep seeing yours until removed under "Who sees my rides".
-    func leave(_ friend: FriendSnapshot) async {
+    func accept(_ request: FriendRequest) async {
         do {
-            try await FriendsCloud.leave(zoneID: friend.zoneID)
+            try await backend?.accept(request)
+            justAccepted = request.name
+            lastError = nil
+            await refresh()
+        } catch {
+            lastError = "That request is no longer there."
+            await refresh()
+        }
+    }
+
+    /// Declines an incoming request or cancels one you sent.
+    func dismiss(_ request: FriendRequest) async {
+        requests.removeAll { $0.id == request.id }
+        try? await backend?.dismiss(request)
+    }
+
+    /// Ends a friendship both ways: neither of you sees the other's rides any more.
+    func unfriend(_ friend: FriendSnapshot) async {
+        do {
+            try await backend?.unfriend(friend.id)
             friends.removeAll { $0.id == friend.id }
         } catch {
             lastError = Self.message(for: error)
@@ -119,11 +151,15 @@ final class FriendsService {
     /// Publishes the ride for friends, with the photos marked `sharedWithFriends`, after removing
     /// everything inside privacy zones and near the ride's start and end.
     func publish(_ ride: Ride) async {
-        guard availability == .available else { return }
+        if availability != .available { await checkAvailability() }
+        guard availability == .available, let backend else { return }
+        // The published copy must point at a ride that's already in the rider's account.
+        await sync?.sync()
         let privacy = AppSettings.sharePrivacy
         let fullTrack = ride.decodedTrack()
         let shared = Self.sharedRide(from: ride, track: fullTrack).redacted(by: privacy, track: fullTrack)
-        let photoFiles = await Self.exportPhotos(shared.photos.map(\.id))
+        let localIDs = Dictionary((ride.media ?? []).map { ($0.id.uuidString, $0.localIdentifier) }, uniquingKeysWith: { a, _ in a })
+        let photoFiles = await Self.exportPhotos(shared.photos.compactMap { photo in localIDs[photo.id].map { (photo.id, $0) } })
         // Photos that couldn't be exported (deleted, iCloud offline) are left out.
         var final = shared
         final.photos = shared.photos.filter { photoFiles[$0.id] != nil }
@@ -131,7 +167,7 @@ final class FriendsService {
         final.stops = final.stops.map { var stop = $0; stop.photoIDs.removeAll { !photoIDs.contains($0) }; return stop }
 
         do {
-            try await FriendsCloud.publish(final, track: privacy.redact(fullTrack), photoFiles: final.photos.compactMap { photoFiles[$0.id] })
+            try await backend.publish(final, track: privacy.redact(fullTrack), photoFiles: photoFiles)
             ride.sharedWithFriends = true
             ride.sharedAt = .now
             lastError = nil
@@ -144,9 +180,9 @@ final class FriendsService {
     func unpublish(_ ride: Ride) async {
         ride.sharedWithFriends = false
         ride.sharedAt = nil
-        guard availability == .available else { return }
+        guard availability == .available, let backend else { return }
         do {
-            try await FriendsCloud.unpublish(rideID: ride.id)
+            try await backend.unpublish(rideID: ride.id)
         } catch {
             lastError = Self.message(for: error)
         }
@@ -163,7 +199,8 @@ final class FriendsService {
             rideStart: ride.startedAt,
             rideEnd: ride.endedAt,
             track: track,
-            media: media.map { Trail.Media(id: $0.localIdentifier, capturedAt: $0.capturedAt, coordinate: $0.coordinate, spotID: $0.spot?.id) },
+            // MediaLink ids, not Photos ids: they're the same on every phone and safe in storage paths.
+            media: media.map { Trail.Media(id: $0.id.uuidString, capturedAt: $0.capturedAt, coordinate: $0.coordinate, spotID: $0.spot?.id) },
             spots: spots.map { spot in
                 Trail.Spot(id: spot.id, coordinate: spot.coordinate, markedAt: spot.visits.filter { window.contains($0) }.min() ?? spot.createdAt)
             }
@@ -192,21 +229,22 @@ final class FriendsService {
                 SharedRide.Song(title: $0.title, artist: $0.artist, storeID: $0.storeID.isEmpty ? nil : $0.storeID, startedAt: $0.startedAt)
             },
             photos: media.map {
-                SharedRide.Photo(id: $0.localIdentifier, capturedAt: $0.capturedAt, coordinate: $0.coordinate, isVideo: $0.isVideo)
+                SharedRide.Photo(id: $0.id.uuidString, capturedAt: $0.capturedAt, coordinate: $0.coordinate, isVideo: $0.isVideo)
             }
         )
     }
 
     /// JPEG copies (longest side 2048 px) of the chosen photos; a video is shared as a still frame.
-    private static func exportPhotos(_ localIDs: [String]) async -> [String: URL] {
+    /// Keyed by `SharedRide.Photo.id`; `items` pairs each with its Photos local identifier.
+    private static func exportPhotos(_ items: [(id: String, localIdentifier: String)]) async -> [String: URL] {
         let folder = URL.temporaryDirectory.appending(path: "friends-export-\(UUID().uuidString)", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var files: [String: URL] = [:]
-        for (index, id) in localIDs.enumerated() {
-            guard let image = await PhotoImages.image(for: id, size: CGSize(width: 2048, height: 2048), contentMode: .aspectFit),
+        for (index, item) in items.enumerated() {
+            guard let image = await PhotoImages.image(for: item.localIdentifier, size: CGSize(width: 2048, height: 2048), contentMode: .aspectFit),
                   let data = image.jpegData(compressionQuality: 0.8) else { continue }
             let url = folder.appending(path: "\(index).jpg")
-            if (try? data.write(to: url)) != nil { files[id] = url }
+            if (try? data.write(to: url)) != nil { files[item.id] = url }
         }
         return files
     }
@@ -228,25 +266,25 @@ final class FriendsService {
                             path: LiveRide.thinned(Array(visible)))
         // Only the latest position matters: a slower upload is replaced, never queued.
         liveTask?.cancel()
-        liveTask = Task { try? await FriendsCloud.publishLive(live) }
+        liveTask = Task { [backend] in try? await backend?.publishLive(live) }
     }
 
     func endLive() {
         liveTask?.cancel()
         liveThrottle.reset()
-        liveTask = Task { try? await FriendsCloud.endLive() }
+        liveTask = Task { [backend] in try? await backend?.endLive() }
     }
 
     // MARK: Errors
 
+    static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
+
     static func message(for error: Error) -> String {
-        guard let error = error as? CKError else { return error.localizedDescription }
-        switch error.code {
-        case .networkUnavailable, .networkFailure: return "You're offline. Friends will update when you're back online."
-        case .notAuthenticated: return "Sign in to iCloud to use Friends."
-        case .quotaExceeded: return "Your iCloud storage is full, so this ride couldn't be shared."
-        case .participantMayNeedVerification: return "Check the invitation in Settings › iCloud and try again."
-        default: return error.localizedDescription
+        if let error = error as? URLError, [.notConnectedToInternet, .networkConnectionLost, .timedOut].contains(error.code) {
+            return "You're offline. Friends will update when you're back online."
         }
+        return "Something went wrong with Friends. Try again in a moment."
     }
 }

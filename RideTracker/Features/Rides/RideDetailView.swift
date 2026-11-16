@@ -1,5 +1,4 @@
 import Charts
-import MapKit
 import RideKit
 import SwiftUI
 
@@ -13,7 +12,6 @@ struct RideDetailView: View {
     @State private var newName = ""
     @State private var confirmingDelete = false
     @State private var gpxURL: URL?
-    @State private var shareRequest: MediaShareRequest?
     @State private var mediaMode = MediaMode.trail
 
     enum MediaMode { case trail, grid }
@@ -21,12 +19,17 @@ struct RideDetailView: View {
     var body: some View {
         List {
             Section {
-                RideMap(track: track, spots: ride.spots ?? [], media: ride.media ?? [])
+                RideMap(track: track, spots: ride.spots ?? [], media: ride.media ?? [],
+                        destination: ride.destinationSpotID == nil ? ride.destination : nil)
                     .frame(height: 300)
                     .listRowInsets(EdgeInsets())
             }
 
             Section { RideStatsGrid(ride: ride) }
+
+            if let destination = ride.destination {
+                Section("Destination") { DestinationRow(ride: ride, destination: destination) }
+            }
 
             if track.count > 10 {
                 Section("Speed") {
@@ -53,17 +56,7 @@ struct RideDetailView: View {
                         .listRowInsets(EdgeInsets())
                 }
             } header: {
-                HStack {
-                    Text(media.isEmpty ? "Trail" : "Trail · \(media.count) photos & videos")
-                    Spacer()
-                    if !media.isEmpty {
-                        Button("Share all", systemImage: "square.and.arrow.up") {
-                            shareRequest = MediaShareRequest(localIdentifiers: media.map(\.localIdentifier))
-                        }
-                        .font(.footnote)
-                        .textCase(nil)
-                    }
-                }
+                Text(media.isEmpty ? "Trail" : "Trail · \(media.count) photos & videos")
             } footer: {
                 if !media.isEmpty {
                     Text("Also in the Photos app under Albums › Ride Tracker › \(ride.name).")
@@ -115,7 +108,6 @@ struct RideDetailView: View {
         } message: {
             Text("Your photos and videos are never deleted. Spots you marked stay in your Spots.")
         }
-        .mediaSharing($shareRequest)
         .task(id: ride.trackData) {
             track = ride.decodedTrack()
             gpxURL = writeGPX()
@@ -146,39 +138,81 @@ struct RideMap: View {
     let track: [TrackPoint]
     let spots: [Spot]
     let media: [MediaLink]
+    /// Shown when it isn't already one of the spots.
+    var destination: RideDestination?
 
-    var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                MapPolyline(coordinates: segment.coordinates)
-                    .stroke(segment.color, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            }
-            if let first = track.first {
-                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(Brand.highwayYellow)
-            }
-            if let last = track.last, track.count > 1 {
-                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(Brand.asphalt)
-            }
-            ForEach(spots) { spot in
-                Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                    .tint(spot.status.tint)
-            }
-            ForEach(media.filter { $0.spot == nil && $0.coordinate != nil }) { link in
-                Annotation("", coordinate: link.coordinate!.clCoordinate) {
-                    Image(systemName: link.isVideo ? "video.fill" : "camera.fill")
-                        .font(.caption2)
-                        .padding(5)
-                        .background(Brand.asphalt, in: .circle)
-                        .foregroundStyle(Brand.chalk)
-                }
+    /// What a tapped pin shows in the drawer.
+    private enum Selection: Identifiable {
+        case spot(Spot)
+        case media(MediaLink)
+        var id: String {
+            switch self {
+            case .spot(let spot): spot.id.uuidString
+            case .media(let link): link.localIdentifier
             }
         }
-        .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
+    }
+    @State private var selection: Selection?
+
+    var body: some View {
+        GoogleMapView(
+            lines: lines, pins: pins, camera: .fitContent, look: .standard,
+            onTapPin: { id in
+                if let spot = spots.first(where: { $0.id.uuidString == id }) {
+                    selection = .spot(spot)
+                } else if let link = media.first(where: { "media-\($0.localIdentifier)" == id }) {
+                    selection = .media(link)
+                }
+            },
+            onTapMap: { selection = nil }
+        )
+        .mapDrawer(item: $selection) { selection in
+            switch selection {
+            case .spot(let spot): SpotDrawer(spot: spot)
+            case .media(let link): MediaDrawer(link: link)
+            }
+        }
+    }
+
+    private var lines: [MapLine] {
+        segments.enumerated().map { index, segment in
+            MapLine(id: "segment-\(index)", coordinates: segment.coordinates, color: segment.color, width: 5)
+        }
+    }
+
+    private var pins: [MapPin] {
+        var pins: [MapPin] = []
+        if let first = track.first {
+            pins.append(MapPin(id: "start", coordinate: first.coordinate, title: "Start", systemImage: "flag.fill", tint: Brand.highwayYellow,
+                               showsLabel: false))
+        }
+        if let last = track.last, track.count > 1 {
+            pins.append(MapPin(id: "end", coordinate: last.coordinate, title: "End", systemImage: "flag.checkered", tint: Brand.asphalt,
+                               // Rides often end at a spot; its name matters more than "End".
+                               showsLabel: false))
+        }
+        // Photos away from any spot are small and unlabelled, below the spots.
+        for link in media where link.spot == nil {
+            guard let coordinate = link.coordinate else { continue }
+            pins.append(MapPin(id: "media-\(link.localIdentifier)", coordinate: coordinate,
+                               title: link.isVideo ? "Video" : "Photo",
+                               systemImage: link.isVideo ? "video.fill" : "camera.fill",
+                               tint: Brand.asphalt, style: .badge, showsLabel: false))
+        }
+        if let destination {
+            pins.append(MapPin(id: "destination", coordinate: destination.coordinate, title: destination.name,
+                               systemImage: "flag.checkered", tint: Brand.highwayYellow))
+        }
+        for spot in spots {
+            pins.append(MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,
+                               systemImage: spot.category.icon, tint: spot.status.tint))
+        }
+        return pins
     }
 
     /// Splits the route into runs of similar speed (slow → fast: blue → green → orange → red),
     /// and breaks it at GPS gaps so tunnels aren't drawn as straight lines.
-    private var segments: [(coordinates: [CLLocationCoordinate2D], color: Color)] {
+    private var segments: [(coordinates: [Coordinate], color: Color)] {
         guard track.count > 1 else { return [] }
         func bucket(_ p: TrackPoint) -> Int {
             switch Format.speedValue(p.speed ?? 0, usesMetric: true) {
@@ -189,18 +223,18 @@ struct RideMap: View {
             }
         }
         let colors: [Color] = [.blue, .green, .orange, .red]
-        var result: [(coordinates: [CLLocationCoordinate2D], color: Color)] = []
-        var current = [track[0].coordinate.clCoordinate]
+        var result: [(coordinates: [Coordinate], color: Color)] = []
+        var current = [track[0].coordinate]
         var currentBucket = bucket(track[0])
         for (previous, point) in zip(track, track.dropFirst()) {
             let gap = point.timestamp.timeIntervalSince(previous.timestamp) > 60
             let b = bucket(point)
             if gap || b != currentBucket {
                 if current.count > 1 { result.append((current, colors[currentBucket])) }
-                current = gap ? [] : [previous.coordinate.clCoordinate]
+                current = gap ? [] : [previous.coordinate]
                 currentBucket = b
             }
-            current.append(point.coordinate.clCoordinate)
+            current.append(point.coordinate)
         }
         if current.count > 1 { result.append((current, colors[currentBucket])) }
         return result

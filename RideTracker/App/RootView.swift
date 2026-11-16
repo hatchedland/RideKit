@@ -6,30 +6,49 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppSettings.Key.hasSeenSafetyNotice) private var hasSeenSafetyNotice = false
 
-    enum TabID: Hashable { case ride, spots, rides, friends, settings }
+    enum TabID: String, Hashable { case ride, spots, rides, friends, settings }
     #if DEBUG
-    @State private var selection: TabID = SampleRide.requested ? .rides : .ride
+    /// Debug: `-openTab rides` (or spots, friends, settings) opens that tab, for checking screens.
+    @State private var selection: TabID = TabID(rawValue: UserDefaults.standard.string(forKey: "openTab") ?? "")
+        ?? (SampleRide.requested ? .rides : .ride)
     #else
     @State private var selection: TabID = .ride
     #endif
 
+    @Environment(AccountService.self) private var account
+    @Environment(SyncService.self) private var sync
+
     var body: some View {
+        switch account.state {
+        case .checking:
+            // Reading the saved session; a blank asphalt screen, not a sign-in flash.
+            Brand.page.ignoresSafeArea()
+        case .signedOut, .linkSent:
+            SignInView()
+        case .signedIn where account.needsHandle:
+            HandleSetupView()
+        case .signedIn:
+            app
+        }
+    }
+
+    @ViewBuilder private var app: some View {
         @Bindable var recorder = recorder
 
         TabView(selection: $selection) {
-            Tab("Ride", systemImage: "road.lanes", value: .ride) {
+            Tab("Ride", image: "tab-ride", value: .ride) {
                 RecordView()
             }
-            Tab("Spots", systemImage: "mappin.and.ellipse", value: .spots) {
+            Tab("Spots", image: "tab-spots", value: .spots) {
                 SpotsView()
             }
-            Tab("Rides", systemImage: "list.bullet.rectangle", value: .rides) {
+            Tab("Rides", image: "tab-rides", value: .rides) {
                 RidesListView()
             }
-            Tab("Friends", systemImage: "person.2", value: .friends) {
+            Tab("Friends", image: "tab-friends", value: .friends) {
                 FriendsView()
             }
-            Tab("Settings", systemImage: "gearshape", value: .settings) {
+            Tab("Settings", image: "tab-settings", value: .settings) {
                 SettingsView()
             }
         }
@@ -53,13 +72,21 @@ struct RootView: View {
             Text("“\(ride.name)” stopped recording unexpectedly. Everything up to that point is safe.")
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await recorder.runLateSweeps() } }
+            if phase == .active { Task { await recorder.runLateSweeps(); await syncIfIdle() } }
+        }
+        // Everything lives in the rider's account: sync on sign-in, after each ride, and every
+        // minute while the app is open. Not during a ride (battery, data); the ride syncs at End.
+        .task {
+            await syncIfIdle()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                await syncIfIdle()
+            }
+        }
+        .onChange(of: recorder.finishedRideID) { _, id in
+            if id != nil { Task { await syncIfIdle() } }
         }
         .task {
-            ShareAcceptance.install { metadata in
-                selection = .friends
-                Task { await recorder.friends.accept(metadata) }
-            }
             await recorder.friends.start(isRidingLive: recorder.isSharingLive)
         }
         .onChange(of: recorder.isRiding) { _, riding in
@@ -104,5 +131,12 @@ struct SafetyNoticeView: View {
             .controlSize(.large)
         }
         .padding(28)
+    }
+}
+
+extension RootView {
+    func syncIfIdle() async {
+        guard recorder.phase == .idle, account.isSignedIn else { return }
+        await sync.sync()
     }
 }

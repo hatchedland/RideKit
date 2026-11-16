@@ -4,7 +4,13 @@ import SwiftUI
 
 struct SpotsView: View {
     enum Mode: String, CaseIterable, Identifiable {
-        case map = "Map", list = "List", places = "Places"
+        case map = "Map", list = "List"
+        var id: Self { self }
+    }
+
+    /// How the list is arranged. Grouping by area used to be its own "Places" tab.
+    enum Sort: String, CaseIterable, Identifiable {
+        case newest = "Newest", byArea = "By area"
         var id: Self { self }
     }
 
@@ -14,7 +20,8 @@ struct SpotsView: View {
     }
 
     @Query(sort: \Spot.createdAt, order: .reverse) private var spots: [Spot]
-    @State private var mode: Mode = .map
+    @AppStorage("spots.mode") private var mode: Mode = .map
+    @AppStorage("spots.sort") private var sort: Sort = .newest
     @State private var statusFilter: StatusFilter = .all
     @State private var categoryFilter: SpotCategory?
     @State private var searchText = ""
@@ -41,9 +48,8 @@ struct SpotsView: View {
         NavigationStack(path: $path) {
             Group {
                 switch mode {
-                case .map: SpotsMap(spots: filtered) { path.append($0) } onLongPress: { addMode = .pin($0) }
-                case .list: SpotsList(spots: filtered)
-                case .places: PlacesView(spots: filtered)
+                case .map: SpotsMap(spots: filtered) { addMode = .pin($0) }
+                case .list: SpotsList(spots: filtered, sort: sort)
                 }
             }
             .navigationTitle("Spots")
@@ -64,9 +70,15 @@ struct SpotsView: View {
                             .pickerStyle(.menu)
                             Picker("Category", selection: $categoryFilter) {
                                 Text("All categories").tag(SpotCategory?.none)
-                                ForEach(SpotCategory.allCases) { Label($0.title, systemImage: $0.systemImage).tag(Optional($0)) }
+                                ForEach(SpotCategory.allCases) { category in Label { Text(category.title) } icon: { Image(icon: category.icon) }.tag(Optional(category)) }
                             }
                             .pickerStyle(.menu)
+                            if mode == .list {
+                                Picker("Sort", selection: $sort) {
+                                    ForEach(Sort.allCases) { Label($0.rawValue, systemImage: $0 == .newest ? "clock" : "building.2").tag($0) }
+                                }
+                                .pickerStyle(.menu)
+                            }
                         }
                     }
                 }
@@ -98,44 +110,26 @@ struct SpotsView: View {
 
 private struct SpotsMap: View {
     let spots: [Spot]
-    var onSelect: (Spot) -> Void
     var onLongPress: (CLLocationCoordinate2D) -> Void
-
-    @State private var position: MapCameraPosition = .automatic
-    @State private var selection: Spot?
+    @State private var selected: Spot?
 
     var body: some View {
-        MapReader { proxy in
-            Map(position: $position, selection: $selection) {
-                UserAnnotation()
-                ForEach(spots) { spot in
-                    Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                        .tint(spot.status.tint)
-                        .tag(spot)
-                }
-            }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-                MapScaleView()
-            }
-            .gesture(
-                LongPressGesture(minimumDuration: 0.5)
-                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
-                    .onEnded { value in
-                        if case .second(true, let drag?) = value,
-                           let coordinate = proxy.convert(drag.location, from: .local) {
-                            onLongPress(coordinate)
-                        }
-                    }
-            )
-        }
-        .onChange(of: selection) { _, spot in
-            if let spot {
-                onSelect(spot)
-                selection = nil
-            }
-        }
+        GoogleMapView(
+            pins: spots.map {
+                MapPin(id: $0.id.uuidString, coordinate: $0.coordinate, title: $0.displayName,
+                       systemImage: $0.category.icon, tint: $0.status.tint)
+            },
+            camera: .fitContent,
+            showsUserLocation: true,
+            showsLocationButton: true,
+            showsCompass: true,
+            onTapPin: { id in
+                selected = spots.first { $0.id.uuidString == id }
+            },
+            onLongPress: { onLongPress($0.clCoordinate) },
+            onTapMap: { selected = nil }
+        )
+        .mapDrawer(item: $selected) { SpotDrawer(spot: $0) }
         .overlay(alignment: .bottom) {
             if spots.isEmpty {
                 Text("Long-press the map to drop a spot, or tap + to add one.")
@@ -148,31 +142,13 @@ private struct SpotsMap: View {
     }
 }
 
+/// Every spot as a stone card, newest first or grouped by town / area.
 private struct SpotsList: View {
     let spots: [Spot]
+    let sort: SpotsView.Sort
     @Environment(RideRecorder.self) private var recorder
-
-    var body: some View {
-        List {
-            ForEach(spots) { spot in
-                NavigationLink(value: spot) { SpotRow(spot: spot) }
-            }
-            .onDelete { offsets in
-                offsets.map { spots[$0] }.forEach(recorder.spots.delete)
-            }
-        }
-        .overlay {
-            if spots.isEmpty {
-                ContentUnavailableView("No spots yet", systemImage: "mappin.slash",
-                                       description: Text("Mark spots while riding, or add places you want to go."))
-            }
-        }
-    }
-}
-
-/// Spots grouped by city / area.
-private struct PlacesView: View {
-    let spots: [Spot]
+    @State private var deleting: Spot?
+    @State private var selected: Spot?
 
     private var groups: [(place: String, spots: [Spot])] {
         Dictionary(grouping: spots) { $0.locality ?? "Unknown area" }
@@ -181,18 +157,148 @@ private struct PlacesView: View {
     }
 
     var body: some View {
-        List {
-            ForEach(groups, id: \.place) { group in
-                Section {
-                    ForEach(group.spots) { spot in
-                        NavigationLink(value: spot) { SpotRow(spot: spot) }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                switch sort {
+                case .newest:
+                    cards(spots)
+                case .byArea:
+                    ForEach(groups, id: \.place) { group in
+                        let photos = group.spots.reduce(0) { $0 + ($1.media?.count ?? 0) }
+                        RoadHeader(title: group.place,
+                                   trailing: "\(group.spots.count) \(group.spots.count == 1 ? "spot" : "spots")",
+                                   accessibilityText: "\(group.place), \(group.spots.count) spots, \(photos) photos")
+                        cards(group.spots)
                     }
-                } header: {
-                    let mediaCount = group.spots.reduce(0) { $0 + ($1.media?.count ?? 0) }
-                    Text("\(group.place) · \(group.spots.count) spots · \(mediaCount) photos")
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, sort == .newest ? 12 : 0)
+            .padding(.bottom, 24)
         }
+        .background(Brand.page)
+        .overlay {
+            if spots.isEmpty {
+                ContentUnavailableView("No spots yet", systemImage: "mappin.slash",
+                                       description: Text("Mark spots while riding, or add places you want to go."))
+            }
+        }
+        // Same as tapping a pin on the map: a drawer, never a new page.
+        // No map behind a list, so no reason to peek: open full screen.
+        .mapDrawer(item: $selected, startsExpanded: true) { SpotDrawer(spot: $0, showsMap: true) }
+        .confirmationDialog("Delete this spot?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible, presenting: deleting) { spot in
+            Button("Delete “\(spot.displayName)”", role: .destructive) { recorder.spots.delete(spot) }
+        } message: { _ in
+            Text("Its photos stay in your Photos library.")
+        }
+    }
+
+    private func cards(_ spots: [Spot]) -> some View {
+        ForEach(spots) { spot in
+            Button { selected = spot } label: { SpotCard(spot: spot) }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Delete spot", systemImage: "trash", role: .destructive) { deleting = spot }
+                }
+        }
+    }
+}
+
+/// A spot as a card: your photo of it (or its category), the name, a signboard line, where it is.
+struct SpotCard: View {
+    let spot: Spot
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            SpotThumb(spot: spot)
+
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // The ✨ flows with the text, so it stays at the end of a name that wraps.
+                    (Text(spot.displayName)
+                        + Text(spot.nameIsSuggested ? "  \(Image(systemName: "sparkles"))" : "")
+                            .font(.caption).foregroundStyle(.secondary))
+                        .font(.headline)
+                        .lineLimit(2)
+                        .accessibilityLabel(spot.nameIsSuggested ? "\(spot.displayName), suggested name" : spot.displayName)
+                    Text(signLine)
+                        .font(Brand.label)
+                        .tracking(0.6)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
+                if !detailLine.isEmpty {
+                    Text(detailLine)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .background(Brand.card, in: .rect(cornerRadius: 20))
+        .contentShape(.rect(cornerRadius: 20))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "FOOD · VISITED", "VIEWPOINT · WANT TO GO · MUST"
+    private var signLine: String {
+        var parts = [spot.category.shortTitle, spot.status.title]
+        if spot.status == .wantToGo, let priority = spot.priority {
+            parts.append(["", "Someday", "Soon", "Must"][min(3, max(1, priority))])
+        }
+        return parts.joined(separator: " · ").uppercased()
+    }
+
+    /// "Mandya, Karnataka · 3 photos"
+    private var detailLine: String {
+        var parts: [String] = []
+        if let locality = spot.locality { parts.append(locality) }
+        if let count = spot.media?.count, count > 0 { parts.append("\(count) \(count == 1 ? "photo" : "photos")") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// What a spot looks like in a list: your own photo of the place (with a small category badge),
+/// or, without photos, a category tile. Wishlist tiles are highway yellow, visited ones quiet.
+/// The km-stone is kept for distances (rides); a place is recognised by what it looks like.
+struct SpotThumb: View {
+    let spot: Spot
+    var size: CGFloat = 56
+
+    private var photo: MediaLink? {
+        (spot.media ?? []).filter { !$0.isVideo }.min { $0.capturedAt < $1.capturedAt }
+    }
+
+    var body: some View {
+        let corner = size * 0.25
+        ZStack(alignment: .bottomTrailing) {
+            if let photo {
+                AssetThumbnail(localIdentifier: photo.localIdentifier, isVideo: false)
+                    .frame(width: size, height: size)
+                    .clipShape(.rect(cornerRadius: corner))
+                Image(icon: spot.category.icon)
+                    .font(.system(size: size * 0.2, weight: .bold))
+                    .foregroundStyle(Brand.asphalt)
+                    .frame(width: size * 0.4, height: size * 0.4)
+                    .background(spot.status == .wantToGo ? Brand.highwayYellow : Brand.chalk, in: .circle)
+                    .overlay(Circle().stroke(Brand.card, lineWidth: 2))
+                    .offset(x: size * 0.1, y: size * 0.1)
+            } else {
+                let wish = spot.status == .wantToGo
+                Image(icon: spot.category.icon)
+                    .font(.system(size: size * 0.38, weight: .semibold))
+                    .foregroundStyle(wish ? Brand.asphalt : Color.primary)
+                    .frame(width: size, height: size)
+                    .background(wish ? AnyShapeStyle(Brand.highwayYellow) : AnyShapeStyle(.quaternary),
+                                in: .rect(cornerRadius: corner))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
@@ -201,10 +307,7 @@ struct SpotRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: spot.category.systemImage)
-                .font(.title3)
-                .frame(width: 40, height: 40)
-                .background(spot.status.tint.opacity(0.2), in: .circle)
+            SpotThumb(spot: spot, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(spot.displayName).font(.headline).lineLimit(1)

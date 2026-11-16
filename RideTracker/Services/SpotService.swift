@@ -4,15 +4,18 @@ import MapKit
 import RideKit
 import SwiftData
 
-/// Creates spots and fills in their address and a suggested landmark name using Apple Maps data
-/// (free, no API key). Spots are saved first and enriched afterwards, so marking one is instant.
+/// Creates spots and fills them in afterwards, so marking one is instant: a suggested name and
+/// category from the nearest Google Places landmark, and the address and town from Apple's reverse
+/// geocoder (free, and it's only an address).
 @MainActor
 final class SpotService {
     private let context: ModelContext
     private let resolver = ShortLinkResolver()
+    private let places: GooglePlacesClient
 
-    init(context: ModelContext) {
+    init(context: ModelContext, places: GooglePlacesClient? = nil) {
         self.context = context
+        self.places = places ?? .app
     }
 
     enum AddResult {
@@ -62,8 +65,8 @@ final class SpotService {
 
         if spot.name.isEmpty {
             if let landmark = await nearestLandmark(to: spot.coordinate) {
-                spot.name = landmark.name ?? ""
-                if spot.category == .other { spot.category = SpotCategory(landmark.pointOfInterestCategory) }
+                spot.name = landmark.name
+                if spot.category == .other { spot.category = SpotCategory(rawValue: landmark.spotCategory) ?? .other }
             } else if let address = spot.address {
                 spot.name = address
             }
@@ -84,27 +87,18 @@ final class SpotService {
         )
     }
 
-    /// Points of interest within 150 m, nearest first. Used for name suggestions.
-    func landmarks(near coordinate: Coordinate, radius: CLLocationDistance = MediaPlacer.defaultSpotRadius) async -> [MKMapItem] {
-        let request = MKLocalPointsOfInterestRequest(center: coordinate.clCoordinate, radius: radius)
-        guard let response = try? await MKLocalSearch(request: request).start() else { return [] }
-        let here = coordinate.clLocation
-        return response.mapItems.sorted {
-            $0.location.distance(from: here) < $1.location.distance(from: here)
-        }
+    /// Google Places within 150 m, nearest first. Used for name suggestions.
+    func landmarks(near coordinate: Coordinate, radius: Double = MediaPlacer.defaultSpotRadius) async -> [Place] {
+        await places.nearby(coordinate, radius: radius)
     }
 
-    private func nearestLandmark(to coordinate: Coordinate) async -> MKMapItem? {
+    private func nearestLandmark(to coordinate: Coordinate) async -> Place? {
         await landmarks(near: coordinate).first
     }
 
-    /// Search by name for adding wishlist spots ("Chandratal Lake").
-    func search(_ query: String, near region: MKCoordinateRegion?) async -> [MKMapItem] {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.resultTypes = [.pointOfInterest, .address]
-        if let region { request.region = region }
-        return (try? await MKLocalSearch(request: request).start().mapItems) ?? []
+    /// Search by name ("Chandratal Lake"), preferring places near `near`.
+    func search(_ query: String, near: Coordinate?) async -> [Place] {
+        await places.search(query, near: near)
     }
 
     /// Coordinates from pasted text: any Google Maps link (short links are expanded) or "lat, lon".
@@ -118,16 +112,3 @@ final class SpotService {
     }
 }
 
-extension SpotCategory {
-    init(_ category: MKPointOfInterestCategory?) {
-        switch category {
-        case .restaurant?, .cafe?, .bakery?, .foodMarket?, .brewery?, .winery?: self = .food
-        case .gasStation?, .evCharger?: self = .fuel
-        case .hotel?, .campground?: self = .stay
-        case .museum?, .castle?, .landmark?, .fortress?, .nationalMonument?: self = .monument
-        case .automotiveRepair?: self = .mechanic
-        case .nationalPark?, .park?, .beach?: self = .nature
-        default: self = .other
-        }
-    }
-}
