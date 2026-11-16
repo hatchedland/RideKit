@@ -41,6 +41,10 @@ packages:
   GoogleMaps:
     url: https://github.com/googlemaps/ios-maps-sdk
     exactVersion: 11.3.0
+  # Accounts, sync and friends. Project + publishable key: Config/Secrets.xcconfig.
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    exactVersion: 2.55.6
 
 targets:
   RideTracker:
@@ -56,6 +60,8 @@ targets:
     dependencies:
       - package: RideKit
       - package: GoogleMaps
+      - package: Supabase
+        product: Supabase
       - target: RideTrackerWidgets
         embed: true
         codeSign: true
@@ -92,6 +98,14 @@ targets:
           - comgooglemaps
         # Read at launch by GoogleMapsSetup; set in Config/Secrets.xcconfig.
         GMSApiKey: $(GMS_API_KEY)
+        # Supabase project (host only: xcconfig treats "//" as a comment) and publishable key.
+        SupabaseHost: $(SUPABASE_HOST)
+        SupabaseKey: $(SUPABASE_PUBLISHABLE_KEY)
+        # Sign-in links from email open the app: ridetracker://auth-callback
+        CFBundleURLTypes:
+          - CFBundleURLName: com.hatchedland.ridetracker
+            CFBundleURLSchemes:
+              - ridetracker
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

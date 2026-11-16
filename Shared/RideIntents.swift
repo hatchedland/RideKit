@@ -10,16 +10,20 @@ enum RideControl {
     static var startRide: ((String) async throws -> Void)?
     static var endRide: (() async -> Void)?
     static var togglePause: (() async -> Void)?
+    /// Every feature needs an account; the app reports whether the rider is signed in.
+    static var isSignedIn: (() -> Bool)?
 }
 
 enum RideIntentError: Error, CustomLocalizedStringResourceConvertible {
     case appNotReady
     case noRideInProgress
+    case signedOut
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .appNotReady: "Ride Tracker isn't ready yet. Open the app and try again."
         case .noRideInProgress: "No ride in progress. Start a ride first."
+        case .signedOut: "Sign in to Ride Tracker first."
         }
     }
 }
@@ -60,6 +64,7 @@ struct StartRideIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let startRide = RideControl.startRide else { throw RideIntentError.appNotReady }
+        guard RideControl.isSignedIn?() == true else { throw RideIntentError.signedOut }
         try await startRide(name)
         return .result(dialog: "Ride started. Ride safe!")
     }

@@ -2,4 +2,6 @@
 // The Google Maps API key lives in Secrets.xcconfig, which is git-ignored because this repo is public.
 // Copy Secrets.example.xcconfig to Secrets.xcconfig and paste your key there.
 GMS_API_KEY =
+SUPABASE_HOST =
+SUPABASE_PUBLISHABLE_KEY =
 #include? "Secrets.xcconfig"
