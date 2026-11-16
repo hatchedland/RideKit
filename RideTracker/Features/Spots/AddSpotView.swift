@@ -27,9 +27,11 @@ struct AddSpotView: View {
     @Environment(RideRecorder.self) private var recorder
     @State private var status: SpotStatus = .wantToGo
     @State private var name = ""
+    /// From the picked search result; the spot can be recategorised afterwards.
+    @State private var category: SpotCategory = .other
     @State private var linkText = ""
     @State private var query = ""
-    @State private var results: [MKMapItem] = []
+    @State private var results: [Place] = []
     @State private var coordinate: Coordinate?
     @State private var sourceURL: String?
     @State private var message: String?
@@ -123,13 +125,14 @@ struct AddSpotView: View {
                 .submitLabel(.search)
             ForEach(results, id: \.self) { item in
                 Button {
-                    coordinate = Coordinate(item.location.coordinate)
-                    name = item.name ?? ""
+                    coordinate = item.coordinate
+                    name = item.name
+                    category = SpotCategory(rawValue: item.spotCategory) ?? .other
                     results = []
                 } label: {
                     VStack(alignment: .leading) {
-                        Text(item.name ?? "Unnamed place").foregroundStyle(.primary)
-                        if let address = item.address?.shortAddress {
+                        Text(item.name).foregroundStyle(.primary)
+                        if let address = item.address {
                             Text(address).font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -138,6 +141,8 @@ struct AddSpotView: View {
             if let coordinate, results.isEmpty {
                 LabeledContent("Selected", value: coordinate.queryString)
             }
+        } footer: {
+            if !results.isEmpty { PoweredByGoogle() }
         }
     }
 
@@ -188,6 +193,7 @@ struct AddSpotView: View {
             at: coordinate,
             status: status,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            category: category,
             sourceURL: sourceURL,
             allowRevisit: mode == .currentLocation
         )

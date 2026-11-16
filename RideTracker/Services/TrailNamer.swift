@@ -2,9 +2,9 @@ import Foundation
 import MapKit
 import RideKit
 
-/// Suggests names for trail stops that aren't spots: the nearest Apple Maps landmark, else
-/// "near <town>". Answers are cached on disk (not synced) so reopening a ride doesn't hit
-/// Apple's geocoding limits again.
+/// Suggests names for trail stops that aren't spots: the nearest Google Places landmark, else
+/// "near <town>" from Apple's reverse geocoder. Answers are cached on device (not synced) so
+/// reopening a ride doesn't look them up, and pay for them, again.
 @MainActor
 @Observable
 final class TrailNamer {
@@ -20,7 +20,7 @@ final class TrailNamer {
     private(set) var suggestions: [String: Suggestion] = [:]
     private let spots: SpotService
     private var inFlight: Set<String> = []
-    private static let fileURL = URL.cachesDirectory.appending(path: "trail-names.json")
+    private static let fileURL = URL.cachesDirectory.appending(path: "trail-names-google.json")  // new name: drops the old Apple Maps answers
 
     init(spots: SpotService) {
         self.spots = spots
@@ -42,9 +42,8 @@ final class TrailNamer {
             inFlight.insert(key)
             defer { inFlight.remove(key) }
 
-            if let landmark = await spots.landmarks(near: coordinate).first, let name = landmark.name {
-                suggestions[key] = Suggestion(name: name, isLandmark: true,
-                                              categoryRaw: SpotCategory(landmark.pointOfInterestCategory).rawValue)
+            if let landmark = await spots.landmarks(near: coordinate).first {
+                suggestions[key] = Suggestion(name: landmark.name, isLandmark: true, categoryRaw: landmark.spotCategory)
             } else if let locality = await SpotService.reverseGeocode(coordinate).locality {
                 suggestions[key] = Suggestion(name: "near \(locality)", isLandmark: false, categoryRaw: SpotCategory.other.rawValue)
             } else {

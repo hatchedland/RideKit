@@ -6,9 +6,11 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppSettings.Key.hasSeenSafetyNotice) private var hasSeenSafetyNotice = false
 
-    enum TabID: Hashable { case ride, spots, rides, friends, settings }
+    enum TabID: String, Hashable { case ride, spots, rides, friends, settings }
     #if DEBUG
-    @State private var selection: TabID = SampleRide.requested ? .rides : .ride
+    /// Debug: `-openTab rides` (or spots, friends, settings) opens that tab, for checking screens.
+    @State private var selection: TabID = TabID(rawValue: UserDefaults.standard.string(forKey: "openTab") ?? "")
+        ?? (SampleRide.requested ? .rides : .ride)
     #else
     @State private var selection: TabID = .ride
     #endif
@@ -17,19 +19,19 @@ struct RootView: View {
         @Bindable var recorder = recorder
 
         TabView(selection: $selection) {
-            Tab("Ride", systemImage: "road.lanes", value: .ride) {
+            Tab("Ride", image: "tab-ride", value: .ride) {
                 RecordView()
             }
-            Tab("Spots", systemImage: "mappin.and.ellipse", value: .spots) {
+            Tab("Spots", image: "tab-spots", value: .spots) {
                 SpotsView()
             }
-            Tab("Rides", systemImage: "list.bullet.rectangle", value: .rides) {
+            Tab("Rides", image: "tab-rides", value: .rides) {
                 RidesListView()
             }
-            Tab("Friends", systemImage: "person.2", value: .friends) {
+            Tab("Friends", image: "tab-friends", value: .friends) {
                 FriendsView()
             }
-            Tab("Settings", systemImage: "gearshape", value: .settings) {
+            Tab("Settings", image: "tab-settings", value: .settings) {
                 SettingsView()
             }
         }

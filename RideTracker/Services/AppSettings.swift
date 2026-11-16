@@ -4,7 +4,6 @@ import RideKit
 /// User preferences, stored in `UserDefaults` (read with `@AppStorage` in views).
 enum AppSettings {
     enum Key {
-        static let units = "settings.units"
         static let autoPause = "settings.autoPauseSensitivity"
         static let includeScreenshots = "settings.includeScreenshots"
         static let nearbyAlerts = "settings.nearbyAlerts"
@@ -19,31 +18,11 @@ enum AppSettings {
         static let openDirectionsOnStart = "settings.openDirectionsOnStart"
     }
 
-    enum Units: String, CaseIterable, Identifiable {
-        case system, metric, imperial
-        var id: Self { self }
-        var title: String {
-            switch self {
-            case .system: "Automatic"
-            case .metric: "Kilometres"
-            case .imperial: "Miles"
-            }
-        }
-    }
+    /// Always kilometres and km/h: riders here think in km (decided 2026-11-16, no setting).
+    /// Kept as a flag so the formatting code stays unit-aware if that ever changes.
+    static var usesMetric: Bool { true }
 
     private static var defaults: UserDefaults { .standard }
-
-    static var units: Units {
-        Units(rawValue: defaults.string(forKey: Key.units) ?? "") ?? .system
-    }
-
-    static var usesMetric: Bool {
-        switch units {
-        case .metric: true
-        case .imperial: false
-        case .system: Locale.current.measurementSystem != .us
-        }
-    }
 
     static var autoPauseSensitivity: AutoPauseDetector.Sensitivity {
         AutoPauseDetector.Sensitivity(rawValue: defaults.string(forKey: Key.autoPause) ?? "") ?? .normal
@@ -99,6 +78,12 @@ enum Format {
         let value = usesMetric ? meters / 1_000 : meters / 1_609.344
         let unit = usesMetric ? "km" : "mi"
         return value < 100 ? String(format: "%.1f %@", value, unit) : String(format: "%.0f %@", value, unit)
+    }
+
+    /// Distance split for signboard layouts: ("131", "KM"), ("34.8", "KM"), ("0.1", "KM").
+    static func distanceParts(_ meters: Double, usesMetric: Bool = AppSettings.usesMetric) -> (value: String, unit: String) {
+        let value = usesMetric ? meters / 1_000 : meters / 1_609.344
+        return (value < 100 ? String(format: "%.1f", value) : String(format: "%.0f", value), usesMetric ? "KM" : "MI")
     }
 
     static func speed(_ mps: Double, usesMetric: Bool = AppSettings.usesMetric) -> String {

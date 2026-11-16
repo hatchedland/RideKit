@@ -3,10 +3,9 @@ import SwiftUI
 /// The screen while riding: huge glanceable numbers, a big **Mark spot** button, nothing fiddly.
 struct RidingView: View {
     @Environment(RideRecorder.self) private var recorder
-    @AppStorage(AppSettings.Key.units) private var unitsRaw = AppSettings.Units.system.rawValue
     @State private var confirmingEnd = false
 
-    private var usesMetric: Bool { _ = unitsRaw; return AppSettings.usesMetric }
+    private var usesMetric: Bool { AppSettings.usesMetric }
 
     var body: some View {
         @Bindable var recorder = recorder
@@ -14,9 +13,8 @@ struct RidingView: View {
         VStack(spacing: 0) {
             header
             GoogleMapView(
-                lines: recorder.track.count > 1
-                    ? [MapLine(id: "route", coordinates: recorder.track.map(\.coordinate), color: Brand.highwayYellow, width: 6)]
-                    : [],
+                lines: lines,
+                pins: destinationPin,
                 camera: .follow(recorder.track.last?.coordinate, bearing: heading),
                 showsUserLocation: true,
                 padding: UIEdgeInsets(top: 48, left: 0, bottom: 0, right: 0)
@@ -55,6 +53,30 @@ struct RidingView: View {
         }
     }
 
+    /// The road still ahead (Google's two-wheeler route) in chalk, under the road ridden in yellow.
+    private var lines: [MapLine] {
+        var lines: [MapLine] = []
+        if recorder.routeAhead.count > 1 {
+            lines.append(MapLine(id: "ahead", coordinates: recorder.routeAhead, color: Brand.chalk.opacity(0.55), width: 6))
+        }
+        if recorder.track.count > 1 {
+            lines.append(MapLine(id: "ridden", coordinates: recorder.track.map(\.coordinate), color: Brand.highwayYellow, width: 6))
+        }
+        return lines
+    }
+
+    private var destinationPin: [MapPin] {
+        guard let destination = recorder.active?.destination else { return [] }
+        return [MapPin(id: "destination", coordinate: destination.coordinate, title: destination.name,
+                       systemImage: "flag.checkered", tint: Brand.highwayYellow)]
+    }
+
+    /// "TO GO · 4:40 PM" once there's a route to estimate from.
+    private var toGoLabel: String {
+        guard let seconds = recorder.routeRemainingSeconds, !recorder.hasArrived else { return "To go" }
+        return "To go · \(Date.now.addingTimeInterval(seconds).formatted(date: .omitted, time: .shortened))"
+    }
+
     /// The map turns with the direction of travel; GPS reports a negative course when it doesn't know.
     private var heading: Double? {
         guard let course = recorder.track.last?.course, course >= 0 else { return nil }
@@ -89,7 +111,7 @@ struct RidingView: View {
                 // With a destination, "to go" matters more mid-ride than top speed.
                 if recorder.active?.destination != nil {
                     stat(recorder.hasArrived ? "Here" : recorder.remainingMeters.map { Format.distance($0, usesMetric: usesMetric) } ?? "–",
-                         "To go")
+                         toGoLabel)
                 } else {
                     stat(Format.speed(recorder.stats.maxSpeedMps, usesMetric: usesMetric), "Max")
                 }

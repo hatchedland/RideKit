@@ -68,6 +68,8 @@ struct GoogleMapView: View {
     var padding = UIEdgeInsets()
     var onTapPin: ((String) -> Void)?
     var onLongPress: ((Coordinate) -> Void)?
+    /// A tap on the map itself, not on a pin; closes a peeking `mapDrawer`.
+    var onTapMap: (() -> Void)?
 
     var body: some View {
         if GoogleMapsSetup.hasKey {
@@ -255,6 +257,10 @@ private struct GoogleMapCanvas: UIViewRepresentable {
                 parent?.onTapPin?(id)
             }
             return true
+        }
+
+        func mapView(_ mapView: GMSMapView, didTapAt coordinate: CLLocationCoordinate2D) {
+            parent?.onTapMap?()
         }
 
         func mapView(_ mapView: GMSMapView, didLongPressAt coordinate: CLLocationCoordinate2D) {

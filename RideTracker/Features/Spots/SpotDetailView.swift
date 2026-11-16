@@ -5,20 +5,29 @@ import SwiftUI
 
 struct SpotDetailView: View {
     @Bindable var spot: Spot
+    /// Shown in a map drawer: the map is already above it, and nothing opens a new page.
+    var inDrawer = false
+    /// In a drawer the name field is the drawer's header; this is its focus.
+    var drawerNameFocus: FocusState<Bool>.Binding?
+    /// A drawer opened from the list has no map above it, so it shows the spot's own.
+    var showsMap = false
+    @FocusState private var nameFocused: Bool
+
+    /// Renaming is occasional, so nearby names only appear while the name is being edited.
+    private var editingName: Bool { drawerNameFocus?.wrappedValue ?? nameFocused }
     @Environment(RideRecorder.self) private var recorder
-    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
     @State private var confirmingDelete = false
     @State private var landmarkSuggestions: [String] = []
     @State private var shareRequest: MediaShareRequest?
 
     var body: some View {
         List {
+            if !inDrawer || showsMap {
             Section {
                 GoogleMapView(
                     pins: [MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,
-                                  systemImage: spot.category.systemImage, tint: spot.status.tint)],
+                                  systemImage: spot.category.icon, tint: spot.status.tint)],
                     camera: .center(spot.coordinate, zoom: 15),
                     isInteractive: false
                 )
@@ -26,77 +35,62 @@ struct SpotDetailView: View {
                 .listRowInsets(EdgeInsets())
                 .allowsHitTesting(false)
             }
+            }
 
             Section {
-                TextField("Name", text: $spot.name)
-                    .font(.title3.bold())
-                    .onChange(of: spot.name) { spot.nameIsSuggested = false }
-                if spot.nameIsSuggested {
-                    Label("Suggested from Apple Maps. Edit to rename.", systemImage: "sparkles")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                if !landmarkSuggestions.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(landmarkSuggestions, id: \.self) { name in
-                                Button(name) {
-                                    spot.name = name
-                                    spot.nameIsSuggested = false
-                                }
-                                .buttonStyle(.bordered)
-                                .font(.footnote)
-                            }
+                // In a drawer the header is the name field.
+                if !inDrawer {
+                    HStack(spacing: 6) {
+                        TextField("Name", text: $spot.name)
+                            .font(.title3.bold())
+                            .focused($nameFocused)
+                            .submitLabel(.done)
+                            .onChange(of: spot.name) { spot.nameIsSuggested = false }
+                        if spot.nameIsSuggested && !nameFocused {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Suggested name")
                         }
                     }
+                }
+                if editingName && !landmarkSuggestions.isEmpty {
+                    NearbyNames(names: landmarkSuggestions) { name in
+                        spot.name = name
+                        spot.nameIsSuggested = false
+                        if let drawerNameFocus { drawerNameFocus.wrappedValue = false } else { nameFocused = false }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 if let address = spot.address {
                     Text(address).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
 
-            Section("Google Maps") {
-                Button {
-                    UIPasteboard.general.url = URL(string: spot.googleMapsURL)
-                    copied = true
-                } label: {
-                    Label(copied ? "Copied!" : "Copy link", systemImage: copied ? "checkmark" : "doc.on.doc")
-                }
-                if let url = URL(string: spot.googleMapsURL) {
-                    ShareLink(item: url, subject: Text(spot.displayName), message: Text(spot.displayName)) {
-                        Label("Share link", systemImage: "square.and.arrow.up")
-                    }
-                }
-                Button {
-                    openInGoogleMaps()
-                } label: {
-                    Label("Open in Google Maps", systemImage: "map")
-                }
-                Text(spot.googleMapsURL)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
+            // No pop-up menus here: they open wherever the control happens to be in a moving drawer.
+            // Every choice is an inline control that stays put.
             Section("Details") {
                 Picker("Status", selection: $spot.status) {
-                    ForEach(SpotStatus.allCases) { Label($0.title, systemImage: $0.systemImage).tag($0) }
+                    ForEach(SpotStatus.allCases) { Text($0.title).tag($0) }
                 }
-                Picker("Category", selection: $spot.category) {
-                    ForEach(SpotCategory.allCases) { Label($0.title, systemImage: $0.systemImage).tag($0) }
-                }
+                .pickerStyle(.segmented)
+                .listRowSeparator(.hidden)
+
+                CategoryGrid(selection: $spot.category)
+
                 if spot.status == .wantToGo {
-                    Picker("Priority", selection: $spot.priority) {
-                        Text("None").tag(Int?.none)
-                        Text("Someday").tag(Int?.some(1))
-                        Text("Soon").tag(Int?.some(2))
-                        Text("Must go").tag(Int?.some(3))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Priority").font(.subheadline).foregroundStyle(.secondary)
+                        Picker("Priority", selection: $spot.priority) {
+                            Text("None").tag(Int?.none)
+                            Text("Someday").tag(Int?.some(1))
+                            Text("Soon").tag(Int?.some(2))
+                            Text("Must").tag(Int?.some(3))
+                        }
+                        .pickerStyle(.segmented)
                     }
                     TextField("Best season (e.g. May – June)", text: Binding($spot.bestSeason, default: ""))
                 } else {
-                    Picker("Rating", selection: $spot.rating) {
-                        Text("None").tag(Int?.none)
-                        ForEach(1...5, id: \.self) { Text(String(repeating: "★", count: $0)).tag(Int?.some($0)) }
-                    }
+                    StarRating(rating: $spot.rating)
                 }
                 TextField("Notes", text: $spot.notes, axis: .vertical)
                     .lineLimit(3...8)
@@ -126,8 +120,12 @@ struct SpotDetailView: View {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
                     }
                     if let ride = spot.ride {
-                        NavigationLink(value: ride) {
+                        if inDrawer {
                             Label("Marked on “\(ride.name)”", systemImage: "road.lanes")
+                        } else {
+                            NavigationLink(value: ride) {
+                                Label("Marked on “\(ride.name)”", systemImage: "road.lanes")
+                            }
                         }
                     }
                 }
@@ -151,18 +149,9 @@ struct SpotDetailView: View {
         }
         .task {
             let items = await recorder.spots.landmarks(near: spot.coordinate)
-            landmarkSuggestions = items.compactMap(\.name).filter { $0 != spot.name }.prefix(5).map { $0 }
+            landmarkSuggestions = items.map(\.name).filter { $0 != spot.name }.prefix(5).map { $0 }
         }
         .onDisappear { try? recorder.context.save() }
-    }
-
-    private func openInGoogleMaps() {
-        let appURL = GoogleMapsLink.appURL(for: spot.coordinate)
-        if UIApplication.shared.canOpenURL(appURL) {
-            openURL(appURL)
-        } else if let web = URL(string: spot.googleMapsURL) {
-            openURL(web)
-        }
     }
 }
 
@@ -173,5 +162,122 @@ extension Binding where Value: Equatable & Sendable {
             get: { source.wrappedValue ?? defaultValue },
             set: { source.wrappedValue = $0 == defaultValue ? nil : $0 }
         )
+    }
+}
+
+/// A spot in a map drawer: header (tap to expand or collapse) and the spot's details below.
+struct SpotDrawer: View {
+    @Bindable var spot: Spot
+    /// Opened from a list rather than a map: include the spot's small map.
+    var showsMap = false
+    @Environment(\.openURL) private var openURL
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MapDrawerHeader(
+                title: spot.displayName,
+                editableTitle: Binding(get: { spot.name }, set: { spot.name = $0; spot.nameIsSuggested = false }),
+                titleFocus: $nameFocused,
+                subtitle: [spot.category.title, spot.status.title, spot.locality].compactMap { $0 }.joined(separator: " · "),
+                systemImage: spot.category.icon
+            ) {
+                Button("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
+                    openURL(GoogleMapsLink.directionsURL(to: spot.coordinate))
+                }
+                .labelStyle(.iconOnly)
+                .font(.title2)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Directions in Google Maps")
+            }
+            SpotDetailView(spot: spot, inDrawer: true, drawerNameFocus: $nameFocused, showsMap: showsMap)
+        }
+        .animation(.snappy, value: nameFocused)
+    }
+}
+
+/// "NEARBY [Ambedkar circle] [Mari Amma Temple] →": names of places around a spot, shown while
+/// its name is being edited.
+struct NearbyNames: View {
+    let names: [String]
+    var onPick: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("NEARBY").font(Brand.label).tracking(0.6).foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(names, id: \.self) { name in
+                        Button(name) { onPick(name) }
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .background(.quaternary, in: .capsule)
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Use this name")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The eight categories as a 4 × 2 grid of icon tiles: all visible at once, always in the same place.
+struct CategoryGrid: View {
+    @Binding var selection: SpotCategory
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+            ForEach(SpotCategory.allCases) { category in
+                let selected = category == selection
+                Button {
+                    selection = category
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(icon: category.icon).font(.title3)
+                        Text(category.shortTitle).font(.caption2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 58)
+                    // Highway yellow is a fill with asphalt on it, never yellow text.
+                    .foregroundStyle(selected ? Brand.asphalt : .primary)
+                    .background(selected ? AnyShapeStyle(Brand.highwayYellow) : AnyShapeStyle(.quaternary),
+                                in: .rect(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(category.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 4)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+/// Five stars; tapping the current rating again clears it.
+struct StarRating: View {
+    @Binding var rating: Int?
+
+    var body: some View {
+        HStack {
+            Text("Rating")
+            Spacer()
+            HStack(spacing: 4) {
+                ForEach(1...5, id: \.self) { value in
+                    Button {
+                        rating = rating == value ? nil : value
+                    } label: {
+                        Image(systemName: value <= (rating ?? 0) ? "star.fill" : "star")
+                            .font(.title3)
+                            .foregroundStyle(value <= (rating ?? 0) ? Brand.accent : .secondary)
+                            .frame(width: 36, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
+                    .accessibilityAddTraits(value == rating ? .isSelected : [])
+                }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: rating)
     }
 }

@@ -6,9 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.openURL) private var openURL
-    @Query(sort: \Spot.createdAt) private var spots: [Spot]
 
-    @AppStorage(AppSettings.Key.units) private var units = AppSettings.Units.system.rawValue
     @AppStorage(AppSettings.Key.autoPause) private var autoPause = AutoPauseDetector.Sensitivity.normal.rawValue
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
     @AppStorage(AppSettings.Key.nearbyAlerts) private var nearbyAlerts = true
@@ -16,15 +14,11 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.trackSongs) private var trackSongs = true
 
     @State private var photoStatus: PHAuthorizationStatus = .notDetermined
-    @State private var kmlURL: URL?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Riding") {
-                    Picker("Units", selection: $units) {
-                        ForEach(AppSettings.Units.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
                     Picker("Auto-pause", selection: $autoPause) {
                         Text("Less sensitive").tag(AutoPauseDetector.Sensitivity.low.rawValue)
                         Text("Normal").tag(AutoPauseDetector.Sensitivity.normal.rawValue)
@@ -46,7 +40,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Log songs from Apple Music", isOn: $trackSongs)
+                    Toggle("Log songs from the Music app", isOn: $trackSongs)
                 } header: {
                     Text("Music")
                 } footer: {
@@ -54,18 +48,6 @@ struct SettingsView: View {
                 }
 
                 FriendsSettingsSection()
-
-                Section {
-                    if let kmlURL {
-                        ShareLink(item: kmlURL) {
-                            Label("Export all spots (KML)", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                } header: {
-                    Text("Export")
-                } footer: {
-                    Text("Import the KML file at mymaps.google.com to see all your spots in Google Maps.")
-                }
 
                 Section("Privacy") {
                     Text("Your rides, spots and photo links stay on your devices and in your own iCloud. Ride Tracker has no servers and no account. Rides you share with friends go to them through iCloud sharing, with private places removed.")
@@ -80,9 +62,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .task(id: spots.count) {
+            .task {
                 photoStatus = recorder.photos.authorizationStatus
-                kmlURL = writeKML()
             }
         }
     }
@@ -109,16 +90,5 @@ struct SettingsView: View {
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
             }
         }
-    }
-
-    private func writeKML() -> URL? {
-        guard !spots.isEmpty else { return nil }
-        let export = spots.map {
-            ExportSpot(name: $0.displayName, notes: $0.notes, category: $0.category.title,
-                       visited: $0.status == .visited, coordinate: $0.coordinate)
-        }
-        let url = URL.temporaryDirectory.appending(path: "Ride Tracker spots.kml")
-        let kml = GeoExport.kml(name: "Ride Tracker spots", spots: export)
-        return (try? kml.write(to: url, atomically: true, encoding: .utf8)) != nil ? url : nil
     }
 }

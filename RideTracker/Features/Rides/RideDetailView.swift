@@ -12,7 +12,6 @@ struct RideDetailView: View {
     @State private var newName = ""
     @State private var confirmingDelete = false
     @State private var gpxURL: URL?
-    @State private var shareRequest: MediaShareRequest?
     @State private var mediaMode = MediaMode.trail
 
     enum MediaMode { case trail, grid }
@@ -57,17 +56,7 @@ struct RideDetailView: View {
                         .listRowInsets(EdgeInsets())
                 }
             } header: {
-                HStack {
-                    Text(media.isEmpty ? "Trail" : "Trail · \(media.count) photos & videos")
-                    Spacer()
-                    if !media.isEmpty {
-                        Button("Share all", systemImage: "square.and.arrow.up") {
-                            shareRequest = MediaShareRequest(localIdentifiers: media.map(\.localIdentifier))
-                        }
-                        .font(.footnote)
-                        .textCase(nil)
-                    }
-                }
+                Text(media.isEmpty ? "Trail" : "Trail · \(media.count) photos & videos")
             } footer: {
                 if !media.isEmpty {
                     Text("Also in the Photos app under Albums › Ride Tracker › \(ride.name).")
@@ -119,7 +108,6 @@ struct RideDetailView: View {
         } message: {
             Text("Your photos and videos are never deleted. Spots you marked stay in your Spots.")
         }
-        .mediaSharing($shareRequest)
         .task(id: ride.trackData) {
             track = ride.decodedTrack()
             gpxURL = writeGPX()
@@ -153,8 +141,37 @@ struct RideMap: View {
     /// Shown when it isn't already one of the spots.
     var destination: RideDestination?
 
+    /// What a tapped pin shows in the drawer.
+    private enum Selection: Identifiable {
+        case spot(Spot)
+        case media(MediaLink)
+        var id: String {
+            switch self {
+            case .spot(let spot): spot.id.uuidString
+            case .media(let link): link.localIdentifier
+            }
+        }
+    }
+    @State private var selection: Selection?
+
     var body: some View {
-        GoogleMapView(lines: lines, pins: pins, camera: .fitContent, look: .standard)
+        GoogleMapView(
+            lines: lines, pins: pins, camera: .fitContent, look: .standard,
+            onTapPin: { id in
+                if let spot = spots.first(where: { $0.id.uuidString == id }) {
+                    selection = .spot(spot)
+                } else if let link = media.first(where: { "media-\($0.localIdentifier)" == id }) {
+                    selection = .media(link)
+                }
+            },
+            onTapMap: { selection = nil }
+        )
+        .mapDrawer(item: $selection) { selection in
+            switch selection {
+            case .spot(let spot): SpotDrawer(spot: spot)
+            case .media(let link): MediaDrawer(link: link)
+            }
+        }
     }
 
     private var lines: [MapLine] {
@@ -166,10 +183,13 @@ struct RideMap: View {
     private var pins: [MapPin] {
         var pins: [MapPin] = []
         if let first = track.first {
-            pins.append(MapPin(id: "start", coordinate: first.coordinate, title: "Start", systemImage: "flag.fill", tint: Brand.highwayYellow))
+            pins.append(MapPin(id: "start", coordinate: first.coordinate, title: "Start", systemImage: "flag.fill", tint: Brand.highwayYellow,
+                               showsLabel: false))
         }
         if let last = track.last, track.count > 1 {
-            pins.append(MapPin(id: "end", coordinate: last.coordinate, title: "End", systemImage: "flag.checkered", tint: Brand.asphalt))
+            pins.append(MapPin(id: "end", coordinate: last.coordinate, title: "End", systemImage: "flag.checkered", tint: Brand.asphalt,
+                               // Rides often end at a spot; its name matters more than "End".
+                               showsLabel: false))
         }
         // Photos away from any spot are small and unlabelled, below the spots.
         for link in media where link.spot == nil {
@@ -185,7 +205,7 @@ struct RideMap: View {
         }
         for spot in spots {
             pins.append(MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,
-                               systemImage: spot.category.systemImage, tint: spot.status.tint))
+                               systemImage: spot.category.icon, tint: spot.status.tint))
         }
         return pins
     }

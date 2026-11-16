@@ -110,10 +110,12 @@ enum MapPinRenderer {
 
     private static func drawSymbol(_ name: String, size: CGFloat, color: UIColor, in rect: CGRect) {
         let configuration = UIImage.SymbolConfiguration(pointSize: size, weight: .bold)
-        guard let symbol = UIImage(systemName: name, withConfiguration: configuration)?
+        guard let image = UIImage.icon(name, configuration: configuration)?
             .withTintColor(color, renderingMode: .alwaysOriginal) else { return }
-        let origin = CGPoint(x: rect.midX - symbol.size.width / 2, y: rect.midY - symbol.size.height / 2)
-        symbol.draw(at: origin)
+        // SF Symbols size themselves from the point size; our 24 pt icons are scaled to match.
+        let drawSize = image.isSymbolImage ? image.size : CGSize(width: size * 1.35, height: size * 1.35)
+        image.draw(in: CGRect(x: rect.midX - drawSize.width / 2, y: rect.midY - drawSize.height / 2,
+                              width: drawSize.width, height: drawSize.height))
     }
 
     /// Asphalt on light fills (highway yellow), white on dark ones: the brand rule of no yellow-on-light text.

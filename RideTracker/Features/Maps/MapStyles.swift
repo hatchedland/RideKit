@@ -1,4 +1,5 @@
 @preconcurrency import GoogleMaps
+import SwiftUI
 
 /// Google Maps JSON styles for the app's two looks, in light and dark.
 /// Points of interest and transit are always hidden: these maps are about the rider's own spots.
@@ -59,5 +60,15 @@ enum GoogleMapsSetup {
         if let apiKey {
             GMSServices.provideAPIKey(apiKey)
         }
+    }
+}
+
+/// Google's attribution under lists of Google Places results that aren't on a Google map.
+struct PoweredByGoogle: View {
+    var body: some View {
+        Text("Results from Google Maps")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Search results from Google Maps")
     }
 }

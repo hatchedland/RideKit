@@ -129,7 +129,7 @@ struct MediaViewer: View {
     }
 }
 
-private struct AssetFullImage: View {
+struct AssetFullImage: View {
     let localIdentifier: String
     @State private var image: UIImage?
 
@@ -148,7 +148,7 @@ private struct AssetFullImage: View {
     }
 }
 
-private struct AssetVideo: View {
+struct AssetVideo: View {
     let localIdentifier: String
     @State private var player: AVPlayer?
 
@@ -196,5 +196,35 @@ enum PhotoImages {
                 continuation.resume(returning: item)
             }
         }
+    }
+}
+
+/// A photo or video from a ride map's pin, in a map drawer: the picture, when it was taken, Share.
+struct MediaDrawer: View {
+    let link: MediaLink
+    @State private var shareRequest: MediaShareRequest?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MapDrawerHeader(
+                title: link.isVideo ? "Video" : "Photo",
+                subtitle: link.capturedAt.formatted(date: .abbreviated, time: .shortened),
+                systemImage: link.isVideo ? "video.fill" : "camera.fill"
+            ) {
+                Button("Share", systemImage: "square.and.arrow.up") {
+                    shareRequest = MediaShareRequest(localIdentifiers: [link.localIdentifier])
+                }
+                .labelStyle(.iconOnly)
+                .font(.title2)
+                .frame(minWidth: 44, minHeight: 44)
+            }
+            if link.isVideo {
+                AssetVideo(localIdentifier: link.localIdentifier)
+            } else {
+                AssetFullImage(localIdentifier: link.localIdentifier)
+                    .padding(.horizontal)
+            }
+        }
+        .mediaSharing($shareRequest)
     }
 }

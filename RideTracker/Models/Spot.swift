@@ -41,18 +41,23 @@ enum SpotCategory: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    /// One word, for tiles: "Temple" instead of "Temple / monument".
+    var shortTitle: String {
         switch self {
-        case .viewpoint: "binoculars.fill"
-        case .food: "cup.and.saucer.fill"
-        case .fuel: "fuelpump.fill"
-        case .monument: "building.columns.fill"
-        case .stay: "bed.double.fill"
-        case .mechanic: "wrench.and.screwdriver.fill"
-        case .nature: "drop.fill"
-        case .other: "mappin"
+        case .viewpoint: "Viewpoint"
+        case .food: "Food"
+        case .fuel: "Fuel"
+        case .monument: "Temple"
+        case .stay: "Stay"
+        case .mechanic: "Mechanic"
+        case .nature: "Nature"
+        case .other: "Other"
         }
     }
+
+    /// Ride Tracker's own icon for the category (Assets › Icons, drawn by design/make-icons.swift).
+    /// Show it with `Image(icon:)`; map pins accept it like a symbol name.
+    var icon: String { "category-\(rawValue)" }
 }
 
 /// A place the rider marked or wants to visit. Every spot keeps its Google Maps link.

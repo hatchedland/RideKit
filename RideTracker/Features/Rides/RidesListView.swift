@@ -19,18 +19,24 @@ struct RidesListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                ForEach(byMonth, id: \.month) { group in
-                    Section {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12, pinnedViews: []) {
+                    ForEach(byMonth, id: \.month) { group in
+                        let meters = group.rides.reduce(0) { $0 + $1.distanceMeters }
+                        let distance = Format.distanceParts(meters)
+                        RoadHeader(title: group.month.formatted(.dateTime.month(.wide).year()),
+                                   trailing: "\(distance.value) \(distance.unit)",
+                                   accessibilityText: "\(group.month.formatted(.dateTime.month(.wide).year())), \(Format.distance(meters))")
                         ForEach(group.rides) { ride in
-                            NavigationLink(value: ride) { RideRow(ride: ride) }
+                            NavigationLink(value: ride) { RideCard(ride: ride) }
+                                .buttonStyle(.plain)
                         }
-                    } header: {
-                        let total = group.rides.reduce(0) { $0 + $1.distanceMeters }
-                        Text("\(group.month.formatted(.dateTime.month(.wide).year())) · \(Format.distance(total))")
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
             }
+            .background(Brand.page)
             .overlay {
                 if finished.isEmpty {
                     ContentUnavailableView("No rides yet", systemImage: "road.lanes",
@@ -51,29 +57,209 @@ struct RidesListView: View {
     }
 }
 
-struct RideRow: View {
+/// "NOVEMBER 2026 – – – – 166 KM": a signboard label with the road's dashed centre line.
+/// Shared by every journal list (rides by month, spots by area).
+struct RoadHeader: View {
+    let title: String
+    let trailing: String
+    var accessibilityText: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title.uppercased())
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
+            Line()
+                .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [8, 6]))
+                .foregroundStyle(Brand.accent.opacity(0.6))
+                .frame(minWidth: 24, maxHeight: 2)
+            Text(trailing.uppercased())
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .font(Brand.label)
+        .tracking(0.8)
+        .foregroundStyle(.secondary)
+        // Lines up with the stones inside the cards; closer to its own cards than to the ones above.
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
+        .padding(.bottom, -4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText ?? "\(title), \(trailing)")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private struct Line: Shape {
+        func path(in rect: CGRect) -> Path {
+            Path { $0.move(to: CGPoint(x: 0, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
+        }
+    }
+}
+
+/// A ride as a kilometre stone: the distance on the stone, the ride's own shape beside it.
+struct RideCard: View {
     let ride: Ride
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(ride.name).font(.headline)
-            if let destination = ride.destinationName, !ride.name.localizedStandardContains(destination) {
-                Label(destination, systemImage: ride.destinationReachedAt == nil ? "flag" : "flag.checkered")
-                    .font(.subheadline)
+        // 4 pt grid: 16 padding, 12 between columns; name + date grouped (4), stats apart (8).
+        HStack(alignment: .center, spacing: 12) {
+            DistanceStone(meters: ride.distanceMeters)
+                .frame(width: 56, height: 72)
+
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ride.name)
+                        .font(.headline)
+                        .lineLimit(2)
+                    Text(dateLine)
+                        .font(Brand.label)
+                        .tracking(0.6)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
+                if let destination = ride.destinationName, !ride.name.localizedStandardContains(destination) {
+                    Label(destination, systemImage: ride.destinationReachedAt == nil ? "flag" : "flag.checkered")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                // Small metadata: standard width and secondary grey so it stays ≥ 12 pt and ≥ 4.5:1.
+                Text(stats)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            HStack(spacing: 10) {
-                Text(ride.startedAt.formatted(date: .abbreviated, time: .shortened))
-                Label(Format.distance(ride.distanceMeters), systemImage: "road.lanes")
-                if let spots = ride.spots, !spots.isEmpty {
-                    Label("\(spots.count)", systemImage: "mappin")
-                }
-                if let media = ride.media, !media.isEmpty {
-                    Label("\(media.count)", systemImage: "photo")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            RouteSketch(ride: ride)
+                .frame(width: 56, height: 56)
         }
+        .padding(16)
+        .background(Brand.card, in: .rect(cornerRadius: 20))
+        .contentShape(.rect(cornerRadius: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// "SUN 15 NOV · 6:00 AM"
+    private var dateLine: String {
+        let day = ride.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+            .replacingOccurrences(of: ",", with: "")
+        return "\(day) · \(ride.startedAt.formatted(date: .omitted, time: .shortened))".uppercased()
+    }
+
+    /// "4H 07M": signboard-short, so the stats fit on one line.
+    private var time: String {
+        let minutes = Int((ride.duration / 60).rounded())
+        return minutes >= 60 ? String(format: "%dH %02dM", minutes / 60, minutes % 60) : "\(max(1, minutes))M"
+    }
+
+    /// "4H 07M · 6 STOPS · 8 PHOTOS": counts that matter, nothing at zero.
+    private var stats: String {
+        var parts = [time]
+        let spots = ride.spots?.count ?? 0, photos = ride.media?.count ?? 0
+        if spots > 0 { parts.append("\(spots) \(spots == 1 ? "STOP" : "STOPS")") }
+        if photos > 0 { parts.append("\(photos) \(photos == 1 ? "PHOTO" : "PHOTOS")") }
+        return parts.joined(separator: " · ")
+    }
+
+    private var accessibilityText: String {
+        var text = "\(ride.name), \(Format.distance(ride.distanceMeters)), \(ride.startedAt.formatted(date: .abbreviated, time: .shortened))"
+        if let destination = ride.destinationName { text += ", to \(destination)" }
+        return text + ", " + stats.lowercased()
+    }
+}
+
+/// The km-stone with a distance on it: yellow cap reading "KM", chalk body, asphalt text.
+struct DistanceStone: View {
+    let meters: Double
+
+    var body: some View {
+        let distance = Format.distanceParts(meters)
+        GeometryReader { geo in
+            let capHeight = geo.size.height * 0.42
+            ZStack(alignment: .top) {
+                MilestoneShape().fill(Brand.chalk)
+                MilestoneShape()
+                    .fill(Brand.highwayYellow)
+                    .mask(alignment: .top) { Rectangle().frame(height: capHeight) }
+                MilestoneShape().stroke(Brand.asphalt.opacity(0.85), lineWidth: 1.5)
+                VStack(spacing: 0) {
+                    Text(distance.unit)
+                        .font(.caption2.weight(.heavy).width(.expanded))
+                        .frame(height: capHeight)
+                        .padding(.top, geo.size.width * 0.12)
+                    Text(distance.value)
+                        .font(.system(size: 20, weight: .heavy).width(.expanded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .padding(.horizontal, 4)
+                        .frame(maxHeight: .infinity)
+                }
+                .foregroundStyle(Brand.asphalt)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The ride's real shape, drawn small. Tracks are decoded once and shrunk to ~60 points.
+private struct RouteSketch: View {
+    let ride: Ride
+    @State private var points: [CGPoint] = []
+
+    var body: some View {
+        ZStack {
+            SketchLine(points: points)
+                .stroke(Brand.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            if let first = points.first {
+                GeometryReader { geo in
+                    Circle()
+                        .fill(Brand.accent)
+                        .frame(width: 7, height: 7)
+                        .position(x: first.x * geo.size.width, y: first.y * geo.size.height)
+                }
+            }
+        }
+        .task(id: ride.id) { points = RouteSketchCache.points(for: ride) }
+        .accessibilityHidden(true)
+    }
+
+    private struct SketchLine: Shape {
+        let points: [CGPoint]
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            guard points.count > 1 else { return path }
+            path.addLines(points.map { CGPoint(x: rect.minX + $0.x * rect.width, y: rect.minY + $0.y * rect.height) })
+            return path
+        }
+    }
+}
+
+@MainActor
+private enum RouteSketchCache {
+    private static var cache: [UUID: [CGPoint]] = [:]
+
+    /// Points scaled into a unit square, keeping the route's aspect ratio and north up.
+    static func points(for ride: Ride) -> [CGPoint] {
+        if let cached = cache[ride.id] { return cached }
+        let track = ride.decodedTrack()
+        guard track.count > 1 else { return [] }
+        let step = max(1, track.count / 60)
+        let sampled = stride(from: 0, to: track.count, by: step).map { track[$0].coordinate } + [track[track.count - 1].coordinate]
+        // Longitude degrees shrink with latitude; scale them so the shape isn't stretched.
+        let lonScale = cos((sampled.map(\.latitude).reduce(0, +) / Double(sampled.count)) * .pi / 180)
+        let xs = sampled.map { $0.longitude * lonScale }, ys = sampled.map(\.latitude)
+        let minX = xs.min()!, maxX = xs.max()!, minY = ys.min()!, maxY = ys.max()!
+        let span = max(maxX - minX, maxY - minY, 1e-9)
+        let padX = (span - (maxX - minX)) / 2, padY = (span - (maxY - minY)) / 2
+        let result = zip(xs, ys).map { x, y in
+            CGPoint(x: 0.08 + 0.84 * (x - minX + padX) / span, y: 0.08 + 0.84 * (1 - (y - minY + padY) / span))
+        }
+        cache[ride.id] = result
+        return result
     }
 }

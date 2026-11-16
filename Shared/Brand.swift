@@ -18,6 +18,11 @@ enum Brand {
     /// Recording, stop and destructive actions only.
     static let signal = Color(light: 0xC22E22, dark: 0xFF5A4A)
 
+    /// Journal page behind cards: chalk by day, deep asphalt by night (warm, not iOS grey).
+    static let page = Color(light: 0xF6F3EA, dark: 0x100F0D)
+    /// A card on the journal page.
+    static let card = Color(light: 0xFFFFFF, dark: 0x22201C)
+
     // MARK: Type — signboard-wide numbers, system text for everything else.
 
     /// Big glanceable readouts (speed). Wide like a highway sign, tabular so digits don't jump.
