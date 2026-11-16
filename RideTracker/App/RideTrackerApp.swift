@@ -4,7 +4,6 @@ import SwiftUI
 
 @main
 struct RideTrackerApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let container: ModelContainer
     @State private var recorder: RideRecorder
     @State private var account: AccountService
@@ -16,10 +15,13 @@ struct RideTrackerApp: App {
         #if DEBUG
         SampleRide.seedIfRequested(into: container.mainContext)
         #endif
-        _recorder = State(initialValue: RideRecorder(context: container.mainContext))
+        let recorder = RideRecorder(context: container.mainContext)
+        _recorder = State(initialValue: recorder)
         let account = AccountService()
         _account = State(initialValue: account)
-        _sync = State(initialValue: SyncService(context: container.mainContext, account: account))
+        let sync = SyncService(context: container.mainContext, account: account)
+        _sync = State(initialValue: sync)
+        recorder.friends.configure(account: account, sync: sync)
     }
 
     var body: some Scene {
@@ -29,7 +31,16 @@ struct RideTrackerApp: App {
                 .environment(account)
                 .environment(sync)
                 // Sign-in links from email: ridetracker://auth-callback…
-                .onOpenURL { url in Task { await account.handle(url) } }
+                // Sign-in links (ridetracker://auth-callback…) and friend invites (ridetracker://invite/<code>).
+                .onOpenURL { url in
+                    Task {
+                        if url.host() == "invite" {
+                            await recorder.friends.acceptInvite(from: url.absoluteString)
+                        } else {
+                            await account.handle(url)
+                        }
+                    }
+                }
                 .task { RideControl.isSignedIn = { [account] in account.isSignedIn } }
         }
         .modelContainer(container)

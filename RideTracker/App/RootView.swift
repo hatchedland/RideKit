@@ -85,10 +85,6 @@ struct RootView: View {
             if id != nil { Task { await syncIfIdle() } }
         }
         .task {
-            ShareAcceptance.install { metadata in
-                selection = .friends
-                Task { await recorder.friends.accept(metadata) }
-            }
             await recorder.friends.start(isRidingLive: recorder.isSharingLive)
         }
         .onChange(of: recorder.isRiding) { _, riding in
