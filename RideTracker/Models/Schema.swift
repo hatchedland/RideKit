@@ -153,22 +153,108 @@ enum RideTrackerSchemaV2: VersionedSchema {
 }
 
 /// Friends release (version number not decided yet). Adds `Ride.sharedWithFriends` / `Ride.sharedAt` and `MediaLink.sharedWithFriends`.
+/// Already on riders' phones (Personal builds), so frozen like the released versions.
 enum RideTrackerSchemaV3: VersionedSchema {
     static let versionIdentifier = Schema.Version(1, 3, 0)
+    static var models: [any PersistentModel.Type] { [Spot.self, Ride.self, MediaLink.self, PlayedSong.self] }
+
+    @Model final class Spot {
+        var id: UUID = UUID()
+        var name: String = ""
+        var nameIsSuggested: Bool = false
+        var notes: String = ""
+        var categoryRaw: String = "other"
+        var statusRaw: String = "visited"
+        var rating: Int?
+        var priority: Int?
+        var bestSeason: String?
+        var latitude: Double = 0
+        var longitude: Double = 0
+        var altitude: Double?
+        var address: String?
+        var locality: String?
+        var googleMapsURL: String = ""
+        var sourceURL: String?
+        var createdAt: Date = Date.now
+        var visits: [Date] = []
+        var autoVisitedByRideID: UUID?
+        var ride: Ride?
+        @Relationship(deleteRule: .cascade, inverse: \MediaLink.spot) var media: [MediaLink]? = []
+        init() {}
+    }
+
+    @Model final class Ride {
+        var id: UUID = UUID()
+        var name: String = ""
+        var notes: String = ""
+        var startedAt: Date = Date.now
+        var endedAt: Date = Date.now
+        var distanceMeters: Double = 0
+        var movingSeconds: Double = 0
+        var maxSpeedMps: Double = 0
+        var avgMovingSpeedMps: Double = 0
+        var elevationGainMeters: Double = 0
+        @Attribute(.externalStorage) var trackData: Data?
+        var albumLocalIdentifier: String?
+        var albumSweepUntil: Date?
+        var includeScreenshots: Bool = false
+        @Relationship(deleteRule: .nullify, inverse: \Spot.ride) var spots: [Spot]? = []
+        @Relationship(deleteRule: .cascade, inverse: \MediaLink.ride) var media: [MediaLink]? = []
+        @Relationship(deleteRule: .cascade, inverse: \PlayedSong.ride) var songs: [PlayedSong]? = []
+        var sharedWithFriends: Bool = false
+        var sharedAt: Date?
+        init() {}
+    }
+
+    @Model final class MediaLink {
+        var id: UUID = UUID()
+        var localIdentifier: String = ""
+        var cloudIdentifier: String?
+        var kindRaw: String = "photo"
+        var capturedAt: Date = Date.now
+        var latitude: Double?
+        var longitude: Double?
+        var isManual: Bool = false
+        var sharedWithFriends: Bool = false
+        var spot: Spot?
+        var ride: Ride?
+        init() {}
+    }
+
+    @Model final class PlayedSong {
+        var id: UUID = UUID()
+        var title: String = ""
+        var artist: String = ""
+        var album: String = ""
+        var storeID: String = ""
+        var startedAt: Date = Date.now
+        var listenedSeconds: Double = 0
+        var latitude: Double?
+        var longitude: Double?
+        var ride: Ride?
+        init() {}
+    }
+}
+
+/// "Where to?": adds the ride's destination (`Ride.destinationName`, `destinationLatitude`,
+/// `destinationLongitude`, `destinationSpotID`, `destinationReachedAt`).
+enum RideTrackerSchemaV4: VersionedSchema {
+    static let versionIdentifier = Schema.Version(1, 4, 0)
     static var models: [any PersistentModel.Type] { [Spot.self, Ride.self, MediaLink.self, PlayedSong.self] }
 }
 
 /// The schema the app runs on.
-typealias RideTrackerSchemaCurrent = RideTrackerSchemaV3
+typealias RideTrackerSchemaCurrent = RideTrackerSchemaV4
 
 enum RideTrackerMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [RideTrackerSchemaV1.self, RideTrackerSchemaV2.self, RideTrackerSchemaV3.self]
+        [RideTrackerSchemaV1.self, RideTrackerSchemaV2.self, RideTrackerSchemaV3.self, RideTrackerSchemaV4.self]
     }
     static var stages: [MigrationStage] {
         [
             .lightweight(fromVersion: RideTrackerSchemaV1.self, toVersion: RideTrackerSchemaV2.self),
             .lightweight(fromVersion: RideTrackerSchemaV2.self, toVersion: RideTrackerSchemaV3.self),
+            .lightweight(fromVersion: RideTrackerSchemaV3.self, toVersion: RideTrackerSchemaV4.self),
         ]
     }
 }

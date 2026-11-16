@@ -18,6 +18,12 @@ struct RideSummaryView: View {
                 RideStatsGrid(ride: ride)
             }
 
+            if let destination = ride.destination {
+                Section("Destination") {
+                    DestinationRow(ride: ride, destination: destination)
+                }
+            }
+
             Section("Photos album") {
                 Label {
                     Text("\(ride.media?.count ?? 0) photos & videos in “\(ride.name)”")
@@ -123,5 +129,33 @@ struct RideStatsGrid: View {
             Text(value).font(.title3.bold()).monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Where the ride was headed, whether it got there, and "Save as spot" for a new place.
+struct DestinationRow: View {
+    @Environment(RideRecorder.self) private var recorder
+    @Bindable var ride: Ride
+    let destination: RideDestination
+
+    var body: some View {
+        if let reached = ride.destinationReachedAt {
+            Label {
+                Text("Reached \(destination.name) at \(reached.formatted(date: .omitted, time: .shortened))")
+            } icon: {
+                Image(systemName: "flag.checkered").foregroundStyle(.green)
+            }
+            if ride.destinationSpotID == nil {
+                Button("Save \(destination.name) as a spot", systemImage: "mappin.and.ellipse") {
+                    recorder.saveDestinationAsSpot(for: ride)
+                }
+            }
+        } else {
+            Label {
+                Text("Headed for \(destination.name)")
+            } icon: {
+                Image(systemName: "flag").foregroundStyle(.secondary)
+            }
+        }
     }
 }

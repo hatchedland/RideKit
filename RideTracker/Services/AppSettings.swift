@@ -15,6 +15,8 @@ enum AppSettings {
         static let shareRidesByDefault = "settings.friends.shareRidesByDefault"
         static let hideRideEnds = "settings.friends.hideRideEnds"
         static let privacyZones = "settings.friends.privacyZones"
+        /// Start sheet: open Google Maps directions to the destination when the ride starts.
+        static let openDirectionsOnStart = "settings.openDirectionsOnStart"
     }
 
     enum Units: String, CaseIterable, Identifiable {

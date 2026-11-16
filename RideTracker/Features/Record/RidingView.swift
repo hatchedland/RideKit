@@ -86,7 +86,13 @@ struct RidingView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                stat(Format.speed(recorder.stats.maxSpeedMps, usesMetric: usesMetric), "Max")
+                // With a destination, "to go" matters more mid-ride than top speed.
+                if recorder.active?.destination != nil {
+                    stat(recorder.hasArrived ? "Here" : recorder.remainingMeters.map { Format.distance($0, usesMetric: usesMetric) } ?? "–",
+                         "To go")
+                } else {
+                    stat(Format.speed(recorder.stats.maxSpeedMps, usesMetric: usesMetric), "Max")
+                }
             }
         }
         .padding()

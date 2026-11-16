@@ -20,12 +20,17 @@ struct RideDetailView: View {
     var body: some View {
         List {
             Section {
-                RideMap(track: track, spots: ride.spots ?? [], media: ride.media ?? [])
+                RideMap(track: track, spots: ride.spots ?? [], media: ride.media ?? [],
+                        destination: ride.destinationSpotID == nil ? ride.destination : nil)
                     .frame(height: 300)
                     .listRowInsets(EdgeInsets())
             }
 
             Section { RideStatsGrid(ride: ride) }
+
+            if let destination = ride.destination {
+                Section("Destination") { DestinationRow(ride: ride, destination: destination) }
+            }
 
             if track.count > 10 {
                 Section("Speed") {
@@ -145,6 +150,8 @@ struct RideMap: View {
     let track: [TrackPoint]
     let spots: [Spot]
     let media: [MediaLink]
+    /// Shown when it isn't already one of the spots.
+    var destination: RideDestination?
 
     var body: some View {
         GoogleMapView(lines: lines, pins: pins, camera: .fitContent, look: .standard)
@@ -171,6 +178,10 @@ struct RideMap: View {
                                title: link.isVideo ? "Video" : "Photo",
                                systemImage: link.isVideo ? "video.fill" : "camera.fill",
                                tint: Brand.asphalt, style: .badge, showsLabel: false))
+        }
+        if let destination {
+            pins.append(MapPin(id: "destination", coordinate: destination.coordinate, title: destination.name,
+                               systemImage: "flag.checkered", tint: Brand.highwayYellow))
         }
         for spot in spots {
             pins.append(MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,

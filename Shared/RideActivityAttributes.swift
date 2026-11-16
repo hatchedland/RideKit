@@ -15,6 +15,9 @@ struct RideActivityAttributes: ActivityAttributes {
         var usesMetric: Bool
         /// Friends can follow the ride live. Optional so activities started by older versions still decode.
         var sharingLive: Bool? = nil
+        /// Straight-line meters to the destination picked at Start (0 once arrived);
+        /// `nil` for "Just ride". Optional so activities started by older versions still decode.
+        var remainingMeters: Double? = nil
     }
 
     var rideName: String
@@ -29,8 +32,16 @@ extension RideActivityAttributes.ContentState {
 
     var speedUnit: String { usesMetric ? "km/h" : "mph" }
 
-    var distanceText: String {
-        let value = usesMetric ? distanceMeters / 1_000 : distanceMeters / 1_609.344
+    var distanceText: String { Self.text(forMeters: distanceMeters, usesMetric: usesMetric) }
+
+    /// "42.3 km" to the destination, "Here" once arrived, `nil` without a destination.
+    var remainingText: String? {
+        guard let remainingMeters else { return nil }
+        return remainingMeters == 0 ? "Here" : Self.text(forMeters: remainingMeters, usesMetric: usesMetric)
+    }
+
+    private static func text(forMeters meters: Double, usesMetric: Bool) -> String {
+        let value = usesMetric ? meters / 1_000 : meters / 1_609.344
         return String(format: value < 100 ? "%.1f" : "%.0f", value) + (usesMetric ? " km" : " mi")
     }
 }

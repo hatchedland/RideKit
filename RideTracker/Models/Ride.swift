@@ -38,6 +38,16 @@ final class Ride {
     /// When friends last got an up-to-date copy, `nil` if never.
     var sharedAt: Date?
 
+    // Where the rider said they were going (added in schema V4). All `nil` for "Just ride".
+    // Never shared with friends.
+    var destinationName: String?
+    var destinationLatitude: Double?
+    var destinationLongitude: Double?
+    /// The spot it was picked from, if any (usually a wishlist spot).
+    var destinationSpotID: UUID?
+    /// When the ride first came within 150 m of it; `nil` if it never did.
+    var destinationReachedAt: Date?
+
     init(id: UUID, name: String, startedAt: Date) {
         self.id = id
         self.name = name
@@ -46,6 +56,21 @@ final class Ride {
     }
 
     var duration: TimeInterval { endedAt.timeIntervalSince(startedAt) }
+
+    var destination: RideDestination? {
+        get {
+            guard let destinationName, let destinationLatitude, let destinationLongitude else { return nil }
+            return RideDestination(name: destinationName,
+                                   coordinate: Coordinate(latitude: destinationLatitude, longitude: destinationLongitude),
+                                   spotID: destinationSpotID)
+        }
+        set {
+            destinationName = newValue?.name
+            destinationLatitude = newValue?.coordinate.latitude
+            destinationLongitude = newValue?.coordinate.longitude
+            destinationSpotID = newValue?.spotID
+        }
+    }
 
     var soundtrack: [PlayedSong] { (songs ?? []).sorted { $0.startedAt < $1.startedAt } }
 

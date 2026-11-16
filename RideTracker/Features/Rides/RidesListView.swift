@@ -57,6 +57,11 @@ struct RideRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(ride.name).font(.headline)
+            if let destination = ride.destinationName, !ride.name.localizedStandardContains(destination) {
+                Label(destination, systemImage: ride.destinationReachedAt == nil ? "flag" : "flag.checkered")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
             HStack(spacing: 10) {
                 Text(ride.startedAt.formatted(date: .abbreviated, time: .shortened))
                 Label(Format.distance(ride.distanceMeters), systemImage: "road.lanes")

@@ -1,3 +1,5 @@
+import CoreLocation
+import MapKit
 import RideKit
 import SwiftData
 import SwiftUI
@@ -69,60 +71,61 @@ private struct ReadyView: View {
             .navigationTitle("Ride")
             .toolbarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingStart) {
-                StartRideSheet(recentNames: Array(rides.prefix(20).map(\.name)), wishlistNames: wishlist.map(\.displayName))
-                    .presentationDetents([.medium, .large])
+                StartRideSheet(wishlist: wishlist, recentRides: Array(rides.prefix(30)))
+                    .presentationDetents([.large])
             }
         }
     }
 }
 
-/// Name the ride, then Start. An empty name gets "Ride · 12 Oct 2026".
+/// "Where to?" first, then Start. Picking a destination names the ride ("Ride to Zostel Ooty");
+/// "Just ride" skips it. The Action button, Siri and the Lock Screen still start instantly
+/// without this sheet.
 struct StartRideSheet: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.dismiss) private var dismiss
-    var recentNames: [String]
-    var wishlistNames: [String]
+    @Environment(\.openURL) private var openURL
+    var wishlist: [Spot]
+    var recentRides: [Ride]
 
+    @State private var query = ""
+    @State private var destination: RideDestination?
+    @State private var justRide = false
     @State private var name = ""
+    /// The rider typed their own name; picking another destination won't overwrite it.
+    @State private var nameEdited = false
+    @State private var here: Coordinate?
+    @State private var results: [RideDestination] = []
+    @State private var searching = false
     @State private var shareWithFriends = AppSettings.shareRidesByDefault
     @State private var shareLive = false
+    @AppStorage(AppSettings.Key.openDirectionsOnStart) private var openDirections = false
     @State private var error: String?
-    @FocusState private var focused: Bool
+    @FocusState private var focus: Field?
+
+    private enum Field { case search, name }
+
+    private var choosing: Bool { destination == nil && !justRide }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Ride name", text: $name, prompt: Text("e.g. Rishikesh run"))
-                        .focused($focused)
-                        .submitLabel(.go)
-                        .onSubmit(start)
-                        .font(.title3)
-                } footer: {
-                    Text("Every photo and video you take until you end the ride goes into a Photos album with this name.")
-                }
-
-                let suggestions = RideNaming.suggestions(for: name, recentRideNames: recentNames, wishlistSpotNames: wishlistNames)
-                if !suggestions.isEmpty {
-                    Section("Suggestions") {
-                        ForEach(suggestions, id: \.self) { suggestion in
-                            Button(suggestion) { name = suggestion }
+                if choosing {
+                    whereTo
+                } else {
+                    chosen
+                    nameSection
+                    if destination != nil {
+                        Section {
+                            Toggle(isOn: $openDirections) {
+                                Label("Directions in Google Maps", systemImage: "arrow.triangle.turn.up.right.diamond")
+                            }
+                        } footer: {
+                            Text("Opens Google Maps with the route when the ride starts. Ride Tracker keeps recording in the background.")
                         }
                     }
+                    sharing
                 }
-
-                // Decided here, before moving: nothing on the riding screen asks for attention.
-                if recorder.friends.availability == .available {
-                    Section {
-                        Toggle("Share with friends after the ride", isOn: $shareWithFriends)
-                        Toggle("Let friends follow live", isOn: $shareLive)
-                    } footer: {
-                        Text(shareLive
-                             ? "Friends see where you are about once a minute until you end the ride. Your start and privacy zones stay hidden."
-                             : "Photos are never shared automatically; pick them after the ride.")
-                    }
-                }
-
                 if let error {
                     Section { Text(error).foregroundStyle(Brand.signal) }
                 }
@@ -139,19 +142,226 @@ struct StartRideSheet: View {
                         .disabled(recorder.phase != .idle)
                 }
             }
-            .onAppear { focused = true }
+            .safeAreaInset(edge: .bottom) {
+                if !choosing {
+                    Button(action: start) {
+                        Label("Start ride", systemImage: "play.fill")
+                            .font(.title3.bold().width(.expanded))
+                            .foregroundStyle(Brand.asphalt)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Brand.highwayYellow)
+                    .disabled(recorder.phase != .idle)
+                    .padding()
+                    .background(.bar)
+                }
+            }
+            .onAppear { focus = .search }
+            .task { await locate() }
+            .task(id: query) { await search() }
+        }
+    }
+
+    // MARK: Where to?
+
+    private var suggestions: [DestinationSuggestions.Suggestion] {
+        DestinationSuggestions.suggestions(
+            query: query,
+            wishlist: wishlist.map { RideDestination(name: $0.displayName, coordinate: $0.coordinate, spotID: $0.id) },
+            recent: recentRides.compactMap(\.destination),
+            from: here
+        )
+    }
+
+    @ViewBuilder private var whereTo: some View {
+        Section {
+            TextField("Where to?", text: $query, prompt: Text("Search a place, or pick one below"))
+                .font(.title3)
+                .focused($focus, equals: .search)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+        }
+
+        let suggestions = suggestions
+        let wished = suggestions.filter { $0.source == .wishlist }
+        let recent = suggestions.filter { $0.source == .recent }
+        if !wished.isEmpty {
+            Section("Wishlist") {
+                ForEach(wished, id: \.self) { row($0.destination, distance: $0.distance, icon: "star.fill") }
+            }
+        }
+        if !recent.isEmpty {
+            Section("Recent") {
+                ForEach(recent, id: \.self) { row($0.destination, distance: $0.distance, icon: "clock.arrow.circlepath") }
+            }
+        }
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            Section("Places") {
+                if searching && results.isEmpty {
+                    HStack { ProgressView(); Text("Searching…").foregroundStyle(.secondary) }
+                } else if results.isEmpty {
+                    Text("No places found for “\(query)”. Check your connection, or pick from your wishlist.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(results, id: \.self) { row($0, distance: here.map($0.remainingDistance(from:)), icon: "mappin.circle") }
+            }
+        }
+
+        Section {
+            Button {
+                justRide = true
+                focus = .name
+            } label: {
+                Label("Just ride (no destination)", systemImage: "road.lanes")
+            }
+        } footer: {
+            Text("Where you're going is never shared with friends.")
+        }
+    }
+
+    private func row(_ place: RideDestination, distance: Double?, icon: String) -> some View {
+        Button {
+            choose(place)
+        } label: {
+            HStack {
+                Label(place.name, systemImage: icon)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer()
+                if let distance {
+                    Text(Format.distance(distance))
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityHint("Ride here")
+    }
+
+    private func choose(_ place: RideDestination) {
+        destination = place
+        if !nameEdited { name = RideNaming.name(goingTo: place) }
+        focus = nil
+    }
+
+    // MARK: After choosing
+
+    private var chosen: some View {
+        Section {
+            HStack {
+                if let destination {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(destination.name).font(.headline)
+                            if let here {
+                                Text("\(Format.distance(destination.remainingDistance(from: here))) away")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: "flag.checkered")
+                    }
+                } else {
+                    Label("Just ride", systemImage: "road.lanes").font(.headline)
+                }
+                Spacer()
+                Button("Change") {
+                    destination = nil
+                    justRide = false
+                    focus = .search
+                }
+                .buttonStyle(.borderless)
+            }
+        } header: {
+            Text("Where to")
+        }
+    }
+
+    private var nameSection: some View {
+        Section {
+            TextField("Ride name", text: $name, prompt: Text(destination == nil ? "e.g. Sunday ghat run" : "Ride name"))
+                .focused($focus, equals: .name)
+                .submitLabel(.go)
+                .onSubmit(start)
+                .onChange(of: name) { _, newValue in
+                    if let destination, newValue == RideNaming.name(goingTo: destination) { return }
+                    nameEdited = true
+                }
+        } header: {
+            Text("Ride name")
+        } footer: {
+            Text("Every photo and video you take until you end the ride goes into a Photos album with this name.")
+        }
+    }
+
+    // Decided here, before moving: nothing on the riding screen asks for attention.
+    @ViewBuilder private var sharing: some View {
+        if recorder.friends.availability == .available {
+            Section {
+                Toggle("Share with friends after the ride", isOn: $shareWithFriends)
+                Toggle("Let friends follow live", isOn: $shareLive)
+            } footer: {
+                if shareLive {
+                    Text("Friends see where you are about once a minute until you end the ride, and the ride name. Your destination, start and privacy zones stay hidden.")
+                } else {
+                    Text("Photos are never shared automatically; pick them after the ride.")
+                }
+            }
+        }
+    }
+
+    // MARK: Work
+
+    /// One fix for distances and to bias search towards where the rider is.
+    private func locate() async {
+        let session = CLServiceSession(authorization: .whenInUse)
+        defer { session.invalidate() }
+        do {
+            for try await update in CLLocationUpdate.liveUpdates() {
+                if let location = update.location {
+                    here = Coordinate(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+                    return
+                }
+                if update.authorizationDenied || update.authorizationDeniedGlobally { return }
+            }
+        } catch {}
+    }
+
+    /// Apple place search, debounced by `.task(id:)` cancelling the previous query.
+    private func search() async {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 2 else {
+            results = []
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+        searching = true
+        defer { searching = false }
+        let region = here.map { MKCoordinateRegion(center: $0.clCoordinate, latitudinalMeters: 200_000, longitudinalMeters: 200_000) }
+        let items = await recorder.spots.search(text, near: region)
+        guard !Task.isCancelled else { return }
+        results = items.prefix(8).map { item in
+            let coordinate = item.location.coordinate
+            return RideDestination(name: item.name ?? text,
+                                   coordinate: Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude))
         }
     }
 
     private func start() {
+        let destination = destination
         Task {
             do {
-                try await recorder.start(name: name, shareWithFriends: shareWithFriends, shareLive: shareLive)
+                try await recorder.start(name: name, destination: destination, shareWithFriends: shareWithFriends, shareLive: shareLive)
                 dismiss()
+                if let destination, openDirections {
+                    openURL(GoogleMapsLink.directionsURL(to: destination.coordinate))
+                }
             } catch {
                 self.error = "Couldn't start the ride: \(error.localizedDescription)"
             }
         }
     }
 }
-
