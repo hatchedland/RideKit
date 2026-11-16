@@ -29,6 +29,7 @@ settings:
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
 
 fileGroups:
+  - Config
   - TestRoutes
   - PLAN.md
   - README.md
@@ -36,6 +37,10 @@ fileGroups:
 packages:
   RideKit:
     path: Packages/RideKit
+  # The maps inside the app. Needs an API key: see Config/Secrets.example.xcconfig.
+  GoogleMaps:
+    url: https://github.com/googlemaps/ios-maps-sdk
+    exactVersion: 11.3.0
 
 targets:
   RideTracker:
@@ -44,8 +49,13 @@ targets:
     sources:
       - path: RideTracker
       - path: Shared
+    configFiles:
+      Debug: Config/App.xcconfig
+      Personal: Config/App.xcconfig
+      Release: Config/App.xcconfig
     dependencies:
       - package: RideKit
+      - package: GoogleMaps
       - target: RideTrackerWidgets
         embed: true
         codeSign: true
@@ -80,6 +90,8 @@ targets:
         CKSharingSupported: true
         LSApplicationQueriesSchemes:
           - comgooglemaps
+        # Read at launch by GoogleMapsSetup; set in Config/Secrets.xcconfig.
+        GMSApiKey: $(GMS_API_KEY)
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

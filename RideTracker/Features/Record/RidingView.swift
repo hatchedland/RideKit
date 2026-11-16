@@ -1,4 +1,3 @@
-import MapKit
 import SwiftUI
 
 /// The screen while riding: huge glanceable numbers, a big **Mark spot** button, nothing fiddly.
@@ -6,7 +5,6 @@ struct RidingView: View {
     @Environment(RideRecorder.self) private var recorder
     @AppStorage(AppSettings.Key.units) private var unitsRaw = AppSettings.Units.system.rawValue
     @State private var confirmingEnd = false
-    @State private var position: MapCameraPosition = .userLocation(followsHeading: true, fallback: .automatic)
 
     private var usesMetric: Bool { _ = unitsRaw; return AppSettings.usesMetric }
 
@@ -15,13 +13,14 @@ struct RidingView: View {
 
         VStack(spacing: 0) {
             header
-            Map(position: $position) {
-                UserAnnotation()
-                if recorder.track.count > 1 {
-                    MapPolyline(coordinates: recorder.track.map(\.coordinate.clCoordinate))
-                        .stroke(Brand.highwayYellow, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                }
-            }
+            GoogleMapView(
+                lines: recorder.track.count > 1
+                    ? [MapLine(id: "route", coordinates: recorder.track.map(\.coordinate), color: Brand.highwayYellow, width: 6)]
+                    : [],
+                camera: .follow(recorder.track.last?.coordinate, bearing: heading),
+                showsUserLocation: true,
+                padding: UIEdgeInsets(top: 48, left: 0, bottom: 0, right: 0)
+            )
             .frame(maxHeight: .infinity)
             .overlay(alignment: .top) { statusBadges.padding(.top, 8) }
 
@@ -54,6 +53,12 @@ struct RidingView: View {
         } message: {
             Text("The Photos album will be finished with everything you took during the ride.")
         }
+    }
+
+    /// The map turns with the direction of travel; GPS reports a negative course when it doesn't know.
+    private var heading: Double? {
+        guard let course = recorder.track.last?.course, course >= 0 else { return nil }
+        return course
     }
 
     private var header: some View {

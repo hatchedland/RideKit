@@ -6,7 +6,12 @@ Setup and release checklist: [README.md](README.md).
 ## Product rules (decided with the owner — don't change without asking)
 
 - **Spots are the core.** Every spot stores a Google Maps URL built with the official Maps URLs format
-  (`https://www.google.com/maps/search/?api=1&query=lat,lon`). No Google API keys, no Places API.
+  (`https://www.google.com/maps/search/?api=1&query=lat,lon`). No Places API.
+- **Maps inside the app are Google Maps (decided 2026-11-12)**: Maps SDK for iOS through the shared
+  `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. Directions hand off to the Google
+  Maps app via Maps URLs. Place search and suggested spot names stay on Apple (`MKLocalSearch`,
+  `MKReverseGeocodingRequest`). The API key lives in git-ignored `Config/Secrets.xcconfig` (public
+  repo); without it maps show a placeholder instead of crashing.
 - **Mark spot while riding = one tap, zero looking**: riding screen, Lock Screen Live Activity, Action
   button, Siri. Save first, name later. Never add UI that needs attention while moving.
 - **Wishlist**: spots are `wantToGo` or `visited`. A ride auto-visits a wishlist spot only if the rider
@@ -46,7 +51,8 @@ Setup and release checklist: [README.md](README.md).
 
 ## Tech constraints
 
-- iOS 26+, Swift 6 strict concurrency, SwiftUI. **Apple frameworks only — no third-party dependencies.**
+- iOS 26+, Swift 6 strict concurrency, SwiftUI. **Apple frameworks only — the one exception is the
+  Google Maps SDK for iOS** (SPM, pinned in `project.yml`). No other third-party dependencies.
 - Always the latest non-deprecated APIs, e.g. `CLLocationUpdate.liveUpdates` + `CLServiceSession` +
   `CLBackgroundActivitySession` (only "When In Use" permission — never ask for "Always"),
   `MKReverseGeocodingRequest` (not `CLGeocoder`), `MKMapItem.location` / `.address` (not `placemark`).

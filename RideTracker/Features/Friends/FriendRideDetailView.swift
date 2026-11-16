@@ -1,4 +1,3 @@
-import MapKit
 import RideKit
 import SwiftUI
 
@@ -241,27 +240,23 @@ struct FriendRideMap: View {
     let stops: [SharedRide.Stop]
 
     var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                MapPolyline(coordinates: segment)
-                    .stroke(Brand.asphalt, style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
-                MapPolyline(coordinates: segment)
-                    .stroke(Brand.highwayYellow, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-            }
-            ForEach(stops) { stop in
-                Marker(stop.name.isEmpty ? "Stop" : stop.name,
-                       systemImage: (SpotCategory(rawValue: stop.category) ?? .other).systemImage,
-                       coordinate: stop.coordinate.clCoordinate)
-                    .tint(Brand.asphalt)
-            }
-        }
-        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        GoogleMapView(
+            // A dark casing under the yellow keeps the route visible on light roads.
+            lines: segments.enumerated().map { MapLine(id: "casing-\($0)", coordinates: $1, color: Brand.asphalt, width: 7) }
+                + segments.enumerated().map { MapLine(id: "route-\($0)", coordinates: $1, color: Brand.highwayYellow, width: 4) },
+            pins: stops.map { stop in
+                MapPin(id: stop.id, coordinate: stop.coordinate, title: stop.name.isEmpty ? "Stop" : stop.name,
+                       systemImage: (SpotCategory(rawValue: stop.category) ?? .other).systemImage, tint: Brand.asphalt)
+            },
+            camera: .fitContent,
+            look: .muted
+        )
     }
 
     /// Breaks the line where points were removed (privacy zones) or GPS dropped out.
-    private var segments: [[CLLocationCoordinate2D]] {
-        var result: [[CLLocationCoordinate2D]] = []
-        var current: [CLLocationCoordinate2D] = []
+    private var segments: [[Coordinate]] {
+        var result: [[Coordinate]] = []
+        var current: [Coordinate] = []
         for (index, point) in track.enumerated() {
             if index > 0 {
                 let previous = track[index - 1]
@@ -272,7 +267,7 @@ struct FriendRideMap: View {
                     current = []
                 }
             }
-            current.append(point.coordinate.clCoordinate)
+            current.append(point.coordinate)
         }
         if current.count > 1 { result.append(current) }
         return result

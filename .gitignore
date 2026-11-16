@@ -20,3 +20,6 @@ Package.resolved
 
 # Local signing team for scripts/run-on-iphone.sh
 .team-id
+
+# Google Maps API key (see Config/Secrets.example.xcconfig)
+Config/Secrets.xcconfig

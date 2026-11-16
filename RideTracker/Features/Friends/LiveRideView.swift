@@ -1,4 +1,3 @@
-import MapKit
 import RideKit
 import SwiftUI
 
@@ -8,7 +7,6 @@ struct LiveRideView: View {
     let friendID: String
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.openURL) private var openURL
-    @State private var position: MapCameraPosition = .automatic
 
     private var friend: FriendSnapshot? { recorder.friends.friends.first { $0.id == friendID } }
 
@@ -18,22 +16,17 @@ struct LiveRideView: View {
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     let status = live.status(at: context.date)
                     ZStack(alignment: .bottom) {
-                        Map(position: $position) {
-                            if live.path.count > 1 {
-                                MapPolyline(coordinates: live.path.map(\.clCoordinate))
-                                    .stroke(Brand.highwayYellow, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-                            }
-                            Annotation(friend.name, coordinate: live.position.clCoordinate) {
-                                Image(systemName: "motorcycle")
-                                    .font(.headline)
-                                    .foregroundStyle(Brand.asphalt)
-                                    .padding(8)
-                                    .background(status == .live ? Brand.highwayYellow : Brand.chalk, in: .circle)
-                                    .overlay(Circle().stroke(Brand.asphalt, lineWidth: 2))
-                            }
-                        }
-                        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-                        .mapControls { MapCompass() }
+                        GoogleMapView(
+                            lines: live.path.count > 1
+                                ? [MapLine(id: "path", coordinates: live.path, color: Brand.highwayYellow, width: 5)]
+                                : [],
+                            pins: [MapPin(id: "rider", coordinate: live.position, title: friend.name, systemImage: "motorcycle",
+                                          tint: status == .live ? Brand.highwayYellow : Brand.chalk, style: .rider)],
+                            camera: .fitContent,
+                            look: .muted,
+                            showsCompass: true,
+                            padding: UIEdgeInsets(top: 0, left: 0, bottom: 150, right: 0)
+                        )
 
                         card(friend: friend, live: live, status: status, now: context.date)
                             .padding()
@@ -106,15 +99,19 @@ struct FriendsSpotsMapView: View {
     var body: some View {
         let items = items
         ZStack(alignment: .bottom) {
-            Map(selection: $selection) {
-                ForEach(items) { item in
-                    Marker(item.stop.name, systemImage: (SpotCategory(rawValue: item.stop.category) ?? .other).systemImage,
-                           coordinate: item.stop.coordinate.clCoordinate)
-                        .tint(Brand.asphalt)
-                        .tag(item.id)
+            GoogleMapView(
+                pins: items.map { item in
+                    MapPin(id: item.id, coordinate: item.stop.coordinate, title: item.stop.name,
+                           systemImage: (SpotCategory(rawValue: item.stop.category) ?? .other).systemImage,
+                           tint: item.id == selection ? Brand.highwayYellow : Brand.asphalt)
+                },
+                camera: .fitContent,
+                look: .muted,
+                onTapPin: { id in
+                    selection = id
+                    message = nil
                 }
-            }
-            .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+            )
 
             if let selected = items.first(where: { $0.id == selection }) {
                 VStack(alignment: .leading, spacing: 8) {

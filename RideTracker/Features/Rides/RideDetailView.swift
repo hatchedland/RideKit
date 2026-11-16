@@ -1,5 +1,4 @@
 import Charts
-import MapKit
 import RideKit
 import SwiftUI
 
@@ -148,37 +147,41 @@ struct RideMap: View {
     let media: [MediaLink]
 
     var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                MapPolyline(coordinates: segment.coordinates)
-                    .stroke(segment.color, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-            }
-            if let first = track.first {
-                Marker("Start", systemImage: "flag.fill", coordinate: first.coordinate.clCoordinate).tint(Brand.highwayYellow)
-            }
-            if let last = track.last, track.count > 1 {
-                Marker("End", systemImage: "flag.checkered", coordinate: last.coordinate.clCoordinate).tint(Brand.asphalt)
-            }
-            ForEach(spots) { spot in
-                Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                    .tint(spot.status.tint)
-            }
-            ForEach(media.filter { $0.spot == nil && $0.coordinate != nil }) { link in
-                Annotation("", coordinate: link.coordinate!.clCoordinate) {
-                    Image(systemName: link.isVideo ? "video.fill" : "camera.fill")
-                        .font(.caption2)
-                        .padding(5)
-                        .background(Brand.asphalt, in: .circle)
-                        .foregroundStyle(Brand.chalk)
-                }
-            }
+        GoogleMapView(lines: lines, pins: pins, camera: .fitContent, look: .standard)
+    }
+
+    private var lines: [MapLine] {
+        segments.enumerated().map { index, segment in
+            MapLine(id: "segment-\(index)", coordinates: segment.coordinates, color: segment.color, width: 5)
         }
-        .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
+    }
+
+    private var pins: [MapPin] {
+        var pins: [MapPin] = []
+        if let first = track.first {
+            pins.append(MapPin(id: "start", coordinate: first.coordinate, title: "Start", systemImage: "flag.fill", tint: Brand.highwayYellow))
+        }
+        if let last = track.last, track.count > 1 {
+            pins.append(MapPin(id: "end", coordinate: last.coordinate, title: "End", systemImage: "flag.checkered", tint: Brand.asphalt))
+        }
+        // Photos away from any spot are small and unlabelled, below the spots.
+        for link in media where link.spot == nil {
+            guard let coordinate = link.coordinate else { continue }
+            pins.append(MapPin(id: "media-\(link.localIdentifier)", coordinate: coordinate,
+                               title: link.isVideo ? "Video" : "Photo",
+                               systemImage: link.isVideo ? "video.fill" : "camera.fill",
+                               tint: Brand.asphalt, style: .badge, showsLabel: false))
+        }
+        for spot in spots {
+            pins.append(MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,
+                               systemImage: spot.category.systemImage, tint: spot.status.tint))
+        }
+        return pins
     }
 
     /// Splits the route into runs of similar speed (slow → fast: blue → green → orange → red),
     /// and breaks it at GPS gaps so tunnels aren't drawn as straight lines.
-    private var segments: [(coordinates: [CLLocationCoordinate2D], color: Color)] {
+    private var segments: [(coordinates: [Coordinate], color: Color)] {
         guard track.count > 1 else { return [] }
         func bucket(_ p: TrackPoint) -> Int {
             switch Format.speedValue(p.speed ?? 0, usesMetric: true) {
@@ -189,18 +192,18 @@ struct RideMap: View {
             }
         }
         let colors: [Color] = [.blue, .green, .orange, .red]
-        var result: [(coordinates: [CLLocationCoordinate2D], color: Color)] = []
-        var current = [track[0].coordinate.clCoordinate]
+        var result: [(coordinates: [Coordinate], color: Color)] = []
+        var current = [track[0].coordinate]
         var currentBucket = bucket(track[0])
         for (previous, point) in zip(track, track.dropFirst()) {
             let gap = point.timestamp.timeIntervalSince(previous.timestamp) > 60
             let b = bucket(point)
             if gap || b != currentBucket {
                 if current.count > 1 { result.append((current, colors[currentBucket])) }
-                current = gap ? [] : [previous.coordinate.clCoordinate]
+                current = gap ? [] : [previous.coordinate]
                 currentBucket = b
             }
-            current.append(point.coordinate.clCoordinate)
+            current.append(point.coordinate)
         }
         if current.count > 1 { result.append((current, colors[currentBucket])) }
         return result

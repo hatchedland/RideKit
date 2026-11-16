@@ -1,0 +1,5 @@
+// Settings shared by every build of the app target (Debug, Personal, Release).
+// The Google Maps API key lives in Secrets.xcconfig, which is git-ignored because this repo is public.
+// Copy Secrets.example.xcconfig to Secrets.xcconfig and paste your key there.
+GMS_API_KEY =
+#include? "Secrets.xcconfig"

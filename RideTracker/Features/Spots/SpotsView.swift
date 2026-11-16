@@ -101,41 +101,21 @@ private struct SpotsMap: View {
     var onSelect: (Spot) -> Void
     var onLongPress: (CLLocationCoordinate2D) -> Void
 
-    @State private var position: MapCameraPosition = .automatic
-    @State private var selection: Spot?
-
     var body: some View {
-        MapReader { proxy in
-            Map(position: $position, selection: $selection) {
-                UserAnnotation()
-                ForEach(spots) { spot in
-                    Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                        .tint(spot.status.tint)
-                        .tag(spot)
-                }
-            }
-            .mapControls {
-                MapUserLocationButton()
-                MapCompass()
-                MapScaleView()
-            }
-            .gesture(
-                LongPressGesture(minimumDuration: 0.5)
-                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
-                    .onEnded { value in
-                        if case .second(true, let drag?) = value,
-                           let coordinate = proxy.convert(drag.location, from: .local) {
-                            onLongPress(coordinate)
-                        }
-                    }
-            )
-        }
-        .onChange(of: selection) { _, spot in
-            if let spot {
-                onSelect(spot)
-                selection = nil
-            }
-        }
+        GoogleMapView(
+            pins: spots.map {
+                MapPin(id: $0.id.uuidString, coordinate: $0.coordinate, title: $0.displayName,
+                       systemImage: $0.category.systemImage, tint: $0.status.tint)
+            },
+            camera: .fitContent,
+            showsUserLocation: true,
+            showsLocationButton: true,
+            showsCompass: true,
+            onTapPin: { id in
+                if let spot = spots.first(where: { $0.id.uuidString == id }) { onSelect(spot) }
+            },
+            onLongPress: { onLongPress($0.clCoordinate) }
+        )
         .overlay(alignment: .bottom) {
             if spots.isEmpty {
                 Text("Long-press the map to drop a spot, or tap + to add one.")

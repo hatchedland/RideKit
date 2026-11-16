@@ -1,4 +1,3 @@
-import MapKit
 import RideKit
 import SwiftData
 import SwiftUI
@@ -22,24 +21,25 @@ private struct ReadyView: View {
     private var wishlist: [Spot]
     @Query(sort: \Ride.startedAt, order: .reverse) private var rides: [Ride]
     @State private var showingStart = false
-    @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Map(position: $position) {
-                    UserAnnotation()
-                    ForEach(wishlist) { spot in
-                        Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                            .tint(Brand.highwayYellow)
-                    }
-                }
                 // Muted so the wishlist and the Start button carry the colour.
-                .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-                .mapControls {
-                    MapUserLocationButton()
-                    MapCompass()
-                }
+                GoogleMapView(
+                    pins: wishlist.map {
+                        MapPin(id: $0.id.uuidString, coordinate: $0.coordinate, title: $0.displayName,
+                               systemImage: $0.category.systemImage, tint: Brand.highwayYellow)
+                    },
+                    camera: .userLocation,
+                    look: .muted,
+                    showsUserLocation: true,
+                    showsLocationButton: true,
+                    showsCompass: true,
+                    // Keeps the location button and Google logo above the Start button.
+                    padding: UIEdgeInsets(top: 0, left: 0, bottom: 150, right: 0)
+                )
+                .ignoresSafeArea(edges: .horizontal)
 
                 VStack(spacing: 12) {
                     if let last = rides.first {

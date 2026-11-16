@@ -16,10 +16,12 @@ struct SpotDetailView: View {
     var body: some View {
         List {
             Section {
-                Map(initialPosition: .camera(MapCamera(centerCoordinate: spot.coordinate.clCoordinate, distance: 1_500))) {
-                    Marker(spot.displayName, systemImage: spot.category.systemImage, coordinate: spot.coordinate.clCoordinate)
-                        .tint(spot.status.tint)
-                }
+                GoogleMapView(
+                    pins: [MapPin(id: spot.id.uuidString, coordinate: spot.coordinate, title: spot.displayName,
+                                  systemImage: spot.category.systemImage, tint: spot.status.tint)],
+                    camera: .center(spot.coordinate, zoom: 15),
+                    isInteractive: false
+                )
                 .frame(height: 200)
                 .listRowInsets(EdgeInsets())
                 .allowsHitTesting(false)
@@ -68,13 +70,6 @@ struct SpotDetailView: View {
                     openInGoogleMaps()
                 } label: {
                     Label("Open in Google Maps", systemImage: "map")
-                }
-                Button {
-                    let item = MKMapItem(location: spot.coordinate.clLocation, address: nil)
-                    item.name = spot.displayName
-                    item.openInMaps()
-                } label: {
-                    Label("Open in Apple Maps", systemImage: "applelogo")
                 }
                 Text(spot.googleMapsURL)
                     .font(.caption.monospaced())
