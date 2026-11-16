@@ -8,6 +8,10 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(AccountService.self) private var account
     @Environment(SyncService.self) private var sync
+    @State private var confirmingSignOut = false
+    @State private var signingOut = false
+    /// Changes that couldn't be uploaded; asks before signing out loses them.
+    @State private var unsynced: Int?
 
     @AppStorage(AppSettings.Key.autoPause) private var autoPause = AutoPauseDetector.Sensitivity.normal.rawValue
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
@@ -64,7 +68,8 @@ struct SettingsView: View {
                         }
                         Button("Sync now") { Task { await sync.sync() } }
                             .disabled(sync.status == .syncing)
-                        Button("Sign out", role: .destructive) { Task { await account.signOut() } }
+                        Button("Sign out", role: .destructive) { confirmingSignOut = true }
+                            .disabled(signingOut || recorder.phase != .idle)
                     }
                 }
 
@@ -81,6 +86,17 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .confirmationDialog("Sign out?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) { Task { await signOut(force: false) } }
+            } message: {
+                Text("Your rides, spots and photo details stay in your account and come back when you sign in. They're removed from this phone; photos in your Photos library aren't touched.")
+            }
+            .alert("Some changes haven't synced", isPresented: Binding(get: { unsynced != nil }, set: { if !$0 { unsynced = nil } })) {
+                Button("Stay signed in", role: .cancel) {}
+                Button("Sign out anyway", role: .destructive) { Task { await signOut(force: true) } }
+            } message: {
+                Text("\(unsynced ?? 0) changes are only on this phone (no connection?). Signing out now loses them.")
+            }
             .task {
                 photoStatus = recorder.photos.authorizationStatus
             }
@@ -109,5 +125,20 @@ struct SettingsView: View {
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
             }
         }
+    }
+
+    /// Uploads what's left, then signs out and clears this phone's copy.
+    private func signOut(force: Bool) async {
+        signingOut = true
+        defer { signingOut = false }
+        if !force {
+            let left = await sync.syncBeforeSignOut()
+            if left > 0 {
+                unsynced = left
+                return
+            }
+        }
+        await account.signOut()
+        sync.eraseLocalData()
     }
 }

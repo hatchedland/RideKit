@@ -53,8 +53,13 @@ final class SyncService {
     func sync() async {
         guard status != .syncing, let client = account.client,
               let user = try? await client.auth.session.user else { return }
-        if state.userID != user.id {
-            // Another rider on this phone (or the first sign-in): start the bookkeeping fresh.
+        if let owner = state.userID, owner != user.id {
+            // The phone's data belongs to another account (already in that account's cloud copy):
+            // never show it to, or upload it into, this one.
+            eraseLocalData()
+        }
+        if state.userID == nil {
+            // First sign-in on this phone: rides recorded before accounts existed join this account.
             state = State(userID: user.id)
         }
         status = .syncing
@@ -67,6 +72,38 @@ final class SyncService {
             Self.log.error("Sync failed: \(error.localizedDescription, privacy: .public)")
             status = .failed((error as? URLError) != nil ? "Waiting for a connection" : "Couldn't sync")
         }
+    }
+
+    // MARK: Signing out
+
+    /// Changes on the phone not yet in the account (rows and track files).
+    var unsyncedCount: Int {
+        guard let user = state.userID else { return 0 }
+        let rows = fetch(Ride.self).filter { state.hashes["rides"]?[$0.id] != RideSyncRow($0, userID: user).fingerprint }.count
+            + fetch(Spot.self).filter { state.hashes["spots"]?[$0.id] != SpotSyncRow($0).fingerprint }.count
+            + fetch(MediaLink.self).filter { state.hashes["media_links"]?[$0.id] != MediaSyncRow($0).fingerprint }.count
+            + fetch(PlayedSong.self).filter { state.hashes["played_songs"]?[$0.id] != SongSyncRow($0).fingerprint }.count
+        return rows
+    }
+
+    /// Before signing out: one last sync. Returns how many changes are still only on this phone.
+    func syncBeforeSignOut() async -> Int {
+        await sync()
+        return unsyncedCount
+    }
+
+    /// Removes the rider's data from this phone (it stays in their account), so the next person to
+    /// sign in here never sees it. Photos in the Photos library are never touched.
+    func eraseLocalData() {
+        for ride in fetch(Ride.self) { context.delete(ride) }
+        for spot in fetch(Spot.self) { context.delete(spot) }
+        for link in fetch(MediaLink.self) { context.delete(link) }
+        for song in fetch(PlayedSong.self) { context.delete(song) }
+        try? context.save()
+        state = State()
+        try? FileManager.default.removeItem(at: Self.stateURL)
+        try? FileManager.default.removeItem(at: URL.cachesDirectory.appending(path: "friends"))
+        status = .idle
     }
 
     // MARK: Push

@@ -114,3 +114,30 @@ struct SyncRowTests {
         #expect(link.localIdentifier == "THIS-PHONE")
     }
 }
+
+@MainActor
+@Suite("Signing out")
+struct SignOutTests {
+    @Test func erasingRemovesTheRidersDataFromThePhone() throws {
+        let schema = Schema(versionedSchema: RideTrackerSchemaCurrent.self)
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let context = ModelContext(container)
+        let ride = Ride(id: UUID(), name: "Vainaad", startedAt: .now)
+        context.insert(ride)
+        let spot = Spot(name: "Arafa", coordinate: Coordinate(latitude: 11.5, longitude: 76.3), status: .visited)
+        context.insert(spot)
+        let link = MediaLink(candidate: MediaCandidate(id: "A", capturedAt: .now), cloudIdentifier: nil)
+        link.ride = ride
+        context.insert(link)
+        try context.save()
+
+        let sync = SyncService(context: context, account: AccountService())
+        sync.eraseLocalData()
+
+        #expect(try context.fetchCount(FetchDescriptor<Ride>()) == 0)
+        #expect(try context.fetchCount(FetchDescriptor<Spot>()) == 0)
+        #expect(try context.fetchCount(FetchDescriptor<MediaLink>()) == 0)
+        #expect(sync.unsyncedCount == 0)
+        #expect(sync.status == .idle)
+    }
+}
