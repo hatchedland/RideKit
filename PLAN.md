@@ -478,6 +478,8 @@ it, and the cap colour already encodes road type (yellow NH, green SH, …).
 | `chalk` | `#F6F3EA` | The stone's body, light surfaces |
 | `accent` | `#8A6100` light / `#F5C400` dark | Tinted text and controls (5.5:1 on white); also the `AccentColor` asset |
 | `signal` | `#C22E22` light / `#FF5A4A` dark | Recording, End and problems only |
+| `page` | `#F6F3EA` light / `#100F0D` dark | Journal page behind cards (warm, never iOS grey) |
+| `card` | `#FFFFFF` light / `#22201C` dark | Cards on the journal page, e.g. a ride as a km-stone card |
 
 - **Type:** big numbers in SF Pro **expanded** width (signboard feel, `Brand.readout`, `Brand.stat`,
   `Brand.label`); everything else is the system font. No custom font files.

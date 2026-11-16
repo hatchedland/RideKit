@@ -49,6 +49,12 @@ struct FriendsTests {
         return ride
     }
 
+    /// Shared photos are identified by their MediaLink id; this maps them back to the test's names.
+    private func names(_ ids: [String], in ride: Ride) -> [String] {
+        let byID = Dictionary(uniqueKeysWithValues: (ride.media ?? []).map { ($0.id.uuidString, $0.localIdentifier) })
+        return ids.compactMap { byID[$0] }
+    }
+
     @Test func sharesOnlyChosenPhotosAndHidesHome() throws {
         let container = Persistence.makeContainer(inMemory: true)
         let ride = makeRide(in: container.mainContext)
@@ -59,12 +65,13 @@ struct FriendsTests {
         #expect(shared.id == ride.id)
         #expect(shared.name == "Murthal run")
         #expect(shared.distanceMeters == 36_000)
-        #expect(!shared.photos.contains { $0.id == "private" })  // not chosen
-        #expect(!shared.photos.contains { $0.id == "at-gate" })  // at the start: hidden with its stop
-        #expect(shared.photos.map(\.id) == ["at-dhaba"])
+        let photos = names(shared.photos.map(\.id), in: ride)
+        #expect(!photos.contains("private"))  // not chosen
+        #expect(!photos.contains("at-gate"))  // at the start: hidden with its stop
+        #expect(photos == ["at-dhaba"])
         let stop = try #require(shared.stops.first { $0.name == "Amrik Sukhdev" })
         #expect(stop.category == "food")
-        #expect(stop.photoIDs == ["at-dhaba"])
+        #expect(names(stop.photoIDs, in: ride) == ["at-dhaba"])
         #expect(shared.songs.map(\.title) == ["Safarnama"])
     }
 
@@ -78,6 +85,6 @@ struct FriendsTests {
             .redacted(by: SharePrivacy(zones: [zone], endTrim: 0), track: track)
 
         #expect(!shared.stops.contains { $0.name == "Amrik Sukhdev" })
-        #expect(shared.photos.map(\.id) == ["at-gate"]) // end trim is off, and home has no zone here
+        #expect(names(shared.photos.map(\.id), in: ride) == ["at-gate"]) // end trim is off, and home has no zone here
     }
 }

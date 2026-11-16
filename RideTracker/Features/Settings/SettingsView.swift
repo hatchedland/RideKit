@@ -6,9 +6,13 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.openURL) private var openURL
-    @Query(sort: \Spot.createdAt) private var spots: [Spot]
+    @Environment(AccountService.self) private var account
+    @Environment(SyncService.self) private var sync
+    @State private var confirmingSignOut = false
+    @State private var signingOut = false
+    /// Changes that couldn't be uploaded; asks before signing out loses them.
+    @State private var unsynced: Int?
 
-    @AppStorage(AppSettings.Key.units) private var units = AppSettings.Units.system.rawValue
     @AppStorage(AppSettings.Key.autoPause) private var autoPause = AutoPauseDetector.Sensitivity.normal.rawValue
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
     @AppStorage(AppSettings.Key.nearbyAlerts) private var nearbyAlerts = true
@@ -16,15 +20,11 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.trackSongs) private var trackSongs = true
 
     @State private var photoStatus: PHAuthorizationStatus = .notDetermined
-    @State private var kmlURL: URL?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Riding") {
-                    Picker("Units", selection: $units) {
-                        ForEach(AppSettings.Units.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
                     Picker("Auto-pause", selection: $autoPause) {
                         Text("Less sensitive").tag(AutoPauseDetector.Sensitivity.low.rawValue)
                         Text("Normal").tag(AutoPauseDetector.Sensitivity.normal.rawValue)
@@ -46,7 +46,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Log songs from Apple Music", isOn: $trackSongs)
+                    Toggle("Log songs from the Music app", isOn: $trackSongs)
                 } header: {
                     Text("Music")
                 } footer: {
@@ -55,16 +55,22 @@ struct SettingsView: View {
 
                 FriendsSettingsSection()
 
-                Section {
-                    if let kmlURL {
-                        ShareLink(item: kmlURL) {
-                            Label("Export all spots (KML)", systemImage: "square.and.arrow.up")
+                if case .signedIn(let email) = account.state {
+                    Section("Account") {
+                        LabeledContent("Signed in as", value: email)
+                        LabeledContent("Rides, spots & photo details") {
+                            switch sync.status {
+                            case .idle: Text("Not synced yet")
+                            case .syncing: HStack(spacing: 6) { ProgressView(); Text("Syncing…") }
+                            case .synced(let date): Text("Synced \(date.formatted(.relative(presentation: .named)))")
+                            case .failed(let reason): Text(reason).foregroundStyle(Brand.signal)
+                            }
                         }
+                        Button("Sync now") { Task { await sync.sync() } }
+                            .disabled(sync.status == .syncing)
+                        Button("Sign out", role: .destructive) { confirmingSignOut = true }
+                            .disabled(signingOut || recorder.phase != .idle)
                     }
-                } header: {
-                    Text("Export")
-                } footer: {
-                    Text("Import the KML file at mymaps.google.com to see all your spots in Google Maps.")
                 }
 
                 Section("Privacy") {
@@ -80,9 +86,19 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .task(id: spots.count) {
+            .confirmationDialog("Sign out?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) { Task { await signOut(force: false) } }
+            } message: {
+                Text("Your rides, spots and photo details stay in your account and come back when you sign in. They're removed from this phone; photos in your Photos library aren't touched.")
+            }
+            .alert("Some changes haven't synced", isPresented: Binding(get: { unsynced != nil }, set: { if !$0 { unsynced = nil } })) {
+                Button("Stay signed in", role: .cancel) {}
+                Button("Sign out anyway", role: .destructive) { Task { await signOut(force: true) } }
+            } message: {
+                Text("\(unsynced ?? 0) changes are only on this phone (no connection?). Signing out now loses them.")
+            }
+            .task {
                 photoStatus = recorder.photos.authorizationStatus
-                kmlURL = writeKML()
             }
         }
     }
@@ -111,14 +127,18 @@ struct SettingsView: View {
         }
     }
 
-    private func writeKML() -> URL? {
-        guard !spots.isEmpty else { return nil }
-        let export = spots.map {
-            ExportSpot(name: $0.displayName, notes: $0.notes, category: $0.category.title,
-                       visited: $0.status == .visited, coordinate: $0.coordinate)
+    /// Uploads what's left, then signs out and clears this phone's copy.
+    private func signOut(force: Bool) async {
+        signingOut = true
+        defer { signingOut = false }
+        if !force {
+            let left = await sync.syncBeforeSignOut()
+            if left > 0 {
+                unsynced = left
+                return
+            }
         }
-        let url = URL.temporaryDirectory.appending(path: "Ride Tracker spots.kml")
-        let kml = GeoExport.kml(name: "Ride Tracker spots", spots: export)
-        return (try? kml.write(to: url, atomically: true, encoding: .utf8)) != nil ? url : nil
+        await account.signOut()
+        sync.eraseLocalData()
     }
 }

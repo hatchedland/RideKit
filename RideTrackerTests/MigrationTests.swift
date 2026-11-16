@@ -117,4 +117,66 @@ struct MigrationTests {
         try context.save()
         #expect(try context.fetch(FetchDescriptor<Ride>()).first?.sharedWithFriends == true)
     }
+
+    /// Friends-era stores (what Personal builds on riders' phones hold) keep everything and start
+    /// without a destination; one can be set afterwards.
+    @Test func v3StoreOpensWithCurrentSchema() throws {
+        let folder = URL.temporaryDirectory.appending(path: "migration-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appending(path: "rides.store")
+        let rideID = UUID()
+
+        do {
+            let schema = Schema(versionedSchema: RideTrackerSchemaV3.self)
+            let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none))
+            let context = ModelContext(container)
+            let ride = RideTrackerSchemaV3.Ride()
+            ride.id = rideID
+            ride.name = "Zostel ooty Diwali"
+            ride.distanceMeters = 131_000
+            ride.sharedWithFriends = true
+            let spot = RideTrackerSchemaV3.Spot()
+            spot.name = "Arafa Restaurant"
+            spot.statusRaw = "wantToGo"
+            let link = RideTrackerSchemaV3.MediaLink()
+            link.localIdentifier = "ASSET-1"
+            link.sharedWithFriends = true
+            link.ride = ride
+            let song = RideTrackerSchemaV3.PlayedSong()
+            song.title = "Safarnama"
+            song.ride = ride
+            context.insert(ride)
+            context.insert(spot)
+            context.insert(link)
+            context.insert(song)
+            try context.save()
+        }
+
+        let schema = Schema(versionedSchema: RideTrackerSchemaCurrent.self)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: RideTrackerMigrationPlan.self,
+            configurations: ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)
+        )
+        let context = ModelContext(container)
+        let ride = try #require(try context.fetch(FetchDescriptor<Ride>()).first)
+        #expect(ride.id == rideID)
+        #expect(ride.name == "Zostel ooty Diwali")
+        #expect(ride.distanceMeters == 131_000)
+        #expect(ride.sharedWithFriends)
+        #expect(ride.media?.first?.sharedWithFriends == true)
+        #expect(ride.soundtrack.map(\.title) == ["Safarnama"])
+        #expect(ride.destination == nil)
+        #expect(ride.destinationReachedAt == nil)
+        let spot = try #require(try context.fetch(FetchDescriptor<Spot>()).first)
+        #expect(spot.status == .wantToGo)
+
+        let destination = RideDestination(name: "Zostel Ooty", coordinate: Coordinate(latitude: 11.41, longitude: 76.69), spotID: spot.id)
+        ride.destination = destination
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<Ride>()).first?.destination == destination)
+        ride.destination = nil
+        #expect(ride.destinationName == nil && ride.destinationSpotID == nil)
+    }
 }

@@ -4,9 +4,10 @@ import SwiftUI
 
 @main
 struct RideTrackerApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let container: ModelContainer
     @State private var recorder: RideRecorder
+    @State private var account: AccountService
+    @State private var sync: SyncService
 
     init() {
         let container = Persistence.makeContainer()
@@ -14,13 +15,25 @@ struct RideTrackerApp: App {
         #if DEBUG
         SampleRide.seedIfRequested(into: container.mainContext)
         #endif
-        _recorder = State(initialValue: RideRecorder(context: container.mainContext))
+        let recorder = RideRecorder(context: container.mainContext)
+        _recorder = State(initialValue: recorder)
+        let account = AccountService()
+        _account = State(initialValue: account)
+        let sync = SyncService(context: container.mainContext, account: account)
+        _sync = State(initialValue: sync)
+        recorder.friends.configure(account: account, sync: sync)
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(recorder)
+                .environment(account)
+                .environment(sync)
+                // Sign-in links from email: ridetracker://auth-callback…
+                // Sign-in links from email: ridetracker://auth-callback…
+                .onOpenURL { url in Task { await account.handle(url) } }
+                .task { RideControl.isSignedIn = { [account] in account.isSignedIn } }
         }
         .modelContainer(container)
     }

@@ -1,4 +1,3 @@
-import CloudKit
 import MapKit
 import RideKit
 import SwiftUI
@@ -6,8 +5,8 @@ import SwiftUI
 /// Friends: who's riding now, friends' recent rides, and the spots they stopped at.
 struct FriendsView: View {
     @Environment(RideRecorder.self) private var recorder
-    @State private var manageError: String?
     @State private var confirmingLeave: FriendSnapshot?
+    @State private var showingFind = false
 
     private var friends: FriendsService { recorder.friends }
 
@@ -31,42 +30,27 @@ struct FriendsView: View {
                 .toolbar {
                     if friends.availability == .available {
                         ToolbarItem(placement: .primaryAction) {
-                            Menu {
-                                ShareLink(item: FriendsInvite(), preview: SharePreview("Ride with me on Ride Tracker")) {
-                                    Label("Invite a friend", systemImage: "person.badge.plus")
-                                }
-                                Button("Who sees my rides", systemImage: "person.2") {
-                                    Task {
-                                        do { try await ManageFriends.present() } catch { manageError = FriendsService.message(for: error) }
-                                    }
-                                }
-                            } label: {
-                                Label("Friends", systemImage: "person.badge.plus")
-                            }
+                            Button("Find riders", systemImage: "person.badge.plus") { showingFind = true }
                         }
                     }
                 }
-                .alert("Couldn't open your friends list", isPresented: Binding(get: { manageError != nil }, set: { if !$0 { manageError = nil } })) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text(manageError ?? "")
-                }
+                .sheet(isPresented: $showingFind) { FindRidersView() }
                 .confirmationDialog(
-                    "Stop seeing \(confirmingLeave?.name ?? "")’s rides?",
+                    "Remove \(confirmingLeave?.name ?? "") as a friend?",
                     isPresented: Binding(get: { confirmingLeave != nil }, set: { if !$0 { confirmingLeave = nil } }),
                     titleVisibility: .visible,
                     presenting: confirmingLeave
                 ) { friend in
-                    Button("Stop seeing their rides", role: .destructive) {
-                        Task { await friends.leave(friend) }
+                    Button("Remove friend", role: .destructive) {
+                        Task { await friends.unfriend(friend) }
                     }
                 } message: { _ in
-                    Text("They can still see your rides until you remove them under “Who sees my rides”.")
+                    Text("Neither of you will see the other's rides any more. You can send a new request any time.")
                 }
         }
         .task { await friends.refresh() }
         .task(id: friends.availability) {
-            // Keep live dots fresh while the tab is open. CloudKit isn't a socket; a minute is plenty.
+            // Keep live dots fresh while the tab is open; live positions change about once a minute.
             while !Task.isCancelled, friends.availability == .available {
                 try? await Task.sleep(for: .seconds(30))
                 await friends.refresh()
@@ -79,22 +63,10 @@ struct FriendsView: View {
         switch friends.availability {
         case .checking:
             ProgressView()
-        case .unsupportedBuild:
-            ContentUnavailableView {
-                Label("Friends need iCloud", systemImage: "icloud.slash")
-            } description: {
-                Text("This is the free Personal build, which can't use iCloud. Friends work in the App Store and TestFlight builds.")
-            }
-        case .needsICloud:
-            ContentUnavailableView {
-                Label("Sign in to iCloud", systemImage: "icloud")
-            } description: {
-                Text("Friends share rides through iCloud. Sign in under Settings › your name, then come back.")
-            } actions: {
-                Button("Check again") { Task { await friends.start(isRidingLive: recorder.isSharingLive) } }
-            }
+        case .signedOut:
+            ContentUnavailableView("Signing in…", systemImage: "person.crop.circle")
         case .available:
-            if friends.friends.isEmpty {
+            if friends.friends.isEmpty && friends.requests.isEmpty {
                 emptyState
             } else {
                 list
@@ -106,16 +78,19 @@ struct FriendsView: View {
         ContentUnavailableView {
             Label("Ride with friends", systemImage: "person.2")
         } description: {
-            Text("Invite your riding group. You'll see the rides they share — where they stopped, what they shot — and can follow them live when they choose. Only people you invite see your rides.")
+            Text("Find your riding group by their @handle and send a friend request. Friends see each other's shared rides — where you stopped, what you shot — and can follow each other live.")
         } actions: {
-            ShareLink(item: FriendsInvite(), preview: SharePreview("Ride with me on Ride Tracker")) {
-                Text("Invite a friend")
+            Button { showingFind = true } label: {
+                Text("Find riders")
                     .font(.headline)
                     .foregroundStyle(Brand.asphalt)
                     .padding(.horizontal, 8)
             }
             .buttonStyle(.borderedProminent)
             .tint(Brand.highwayYellow)
+            if let error = friends.lastError {
+                Text(error).font(.footnote).foregroundStyle(Brand.signal)
+            }
             if friends.isRefreshing { ProgressView() }
         }
         .refreshable { await friends.refresh() }
@@ -125,21 +100,19 @@ struct FriendsView: View {
         List {
             if let name = friends.justAccepted {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("You can now see \(name)’s rides.").font(.headline)
-                        Text("Sharing is one-way. Invite \(name) back so they can see yours.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        HStack {
-                            ShareLink(item: FriendsInvite(), preview: SharePreview("Ride with me on Ride Tracker")) {
-                                Text("Invite \(name)").foregroundStyle(Brand.asphalt)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Brand.highwayYellow)
-                            Button("Not now") { friends.justAccepted = nil }
-                                .buttonStyle(.bordered)
-                        }
+                    HStack {
+                        Label("You and \(name) are now friends.", systemImage: "checkmark.seal.fill")
+                        Spacer()
+                        Button("OK") { friends.justAccepted = nil }.buttonStyle(.borderless)
                     }
-                    .padding(.vertical, 4)
+                }
+            }
+
+            if !friends.requests.isEmpty {
+                Section("Requests") {
+                    ForEach(friends.requests) { request in
+                        RequestRow(request: request)
+                    }
                 }
             }
 
@@ -181,7 +154,7 @@ struct FriendsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .swipeActions {
-                        Button("Stop seeing", role: .destructive) { confirmingLeave = friend }
+                        Button("Remove", role: .destructive) { confirmingLeave = friend }
                     }
                 }
             }
@@ -310,40 +283,103 @@ struct FilePhoto: View {
     }
 }
 
-/// The invitation sent through the share sheet: a CloudKit share of the rider's Friends zone.
-struct FriendsInvite: Transferable {
-    static var transferRepresentation: some TransferRepresentation {
-        CKShareTransferRepresentation { _ in
-            .prepareShare(container: FriendsCloud.container) {
-                try await FriendsService.inviteShare()
+/// An incoming request (Accept / Decline) or one you sent (Cancel).
+struct RequestRow: View {
+    @Environment(RideRecorder.self) private var recorder
+    let request: FriendRequest
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.name).font(.headline)
+                Text(request.incoming ? "@\(request.username) wants to be friends" : "@\(request.username) · request sent")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if request.incoming {
+                Button("Decline") { Task { await recorder.friends.dismiss(request) } }
+                    .buttonStyle(.bordered)
+                Button {
+                    Task { await recorder.friends.accept(request) }
+                } label: {
+                    Text("Accept").foregroundStyle(Brand.asphalt)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Brand.highwayYellow)
+            } else {
+                Button("Cancel") { Task { await recorder.friends.dismiss(request) } }
+                    .buttonStyle(.bordered)
             }
         }
+        .controlSize(.small)
     }
 }
 
-/// Apple's participant list for the rider's share: see who follows your rides and remove anyone.
-/// `UICloudSharingController` must be presented modally, so it goes on top of the current screen.
-@MainActor
-enum ManageFriends {
-    private static let delegate = Delegate()
+/// Search riders by @handle and send friend requests, all inside the app.
+struct FindRidersView: View {
+    @Environment(RideRecorder.self) private var recorder
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var results: [RiderResult] = []
+    @State private var searching = false
 
-    static func present() async throws {
-        let share = try await FriendsService.inviteShare()
-        let controller = UICloudSharingController(share: share, container: FriendsCloud.container)
-        controller.delegate = delegate
-        controller.availablePermissions = [.allowPrivate, .allowReadOnly]
-        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        var top = scene?.keyWindow?.rootViewController
-        while let presented = top?.presentedViewController { top = presented }
-        top?.present(controller, animated: true)
+    var body: some View {
+        NavigationStack {
+            List {
+                if AccountService.normalisedHandle(query).count < 2 {
+                    Text("Type at least two letters of their @handle.").foregroundStyle(.secondary)
+                } else if results.isEmpty && !searching {
+                    Text("No rider with a handle starting “@\(AccountService.normalisedHandle(query))”.").foregroundStyle(.secondary)
+                }
+                ForEach(results) { rider in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rider.displayName.isEmpty ? "Rider" : rider.displayName).font(.headline)
+                            Text("@\(rider.username)").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        action(for: rider)
+                    }
+                }
+                if let error = recorder.friends.lastError {
+                    Text(error).font(.footnote).foregroundStyle(Brand.signal)
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "@handle")
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .navigationTitle("Find riders")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task(id: query) {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                searching = true
+                results = await recorder.friends.search(query)
+                searching = false
+            }
+        }
     }
 
-    final class Delegate: NSObject, UICloudSharingControllerDelegate {
-        func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {}
-        func itemTitle(for csc: UICloudSharingController) -> String? {
-            MainActor.assumeIsolated {
-                AppSettings.riderName.isEmpty ? "My rides" : "\(AppSettings.riderName)’s rides"
+    @ViewBuilder
+    private func action(for rider: RiderResult) -> some View {
+        switch recorder.friends.relationship(with: rider.id) {
+        case .friend:
+            Label("Friends", systemImage: "checkmark").foregroundStyle(.secondary).font(.subheadline)
+        case .requested:
+            Text("Requested").foregroundStyle(.secondary).font(.subheadline)
+        case .wantsToBeFriends:
+            if let request = recorder.friends.requests.first(where: { $0.riderID == rider.id && $0.incoming }) {
+                Button {
+                    Task { await recorder.friends.accept(request) }
+                } label: { Text("Accept").foregroundStyle(Brand.asphalt) }
+                .buttonStyle(.borderedProminent).tint(Brand.highwayYellow).controlSize(.small)
             }
+        case .none:
+            Button {
+                Task { await recorder.friends.sendRequest(to: rider) }
+            } label: { Text("Add friend").foregroundStyle(Brand.asphalt) }
+            .buttonStyle(.borderedProminent).tint(Brand.highwayYellow).controlSize(.small)
         }
     }
 }

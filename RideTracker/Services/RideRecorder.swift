@@ -31,6 +31,22 @@ final class RideRecorder {
     private(set) var songsThisRide = 0
     /// Friends can follow this ride live (chosen on the Start sheet).
     private(set) var isSharingLive = false
+    /// Straight-line meters to the destination picked at Start; `nil` without a destination or a fix.
+    private(set) var remainingMeters: Double?
+    /// The rider got within 150 m of the destination this ride.
+    private(set) var hasArrived = false
+    /// The road to the destination still ahead of the rider (Google two-wheeler route), for the map.
+    private(set) var routeAhead: [Coordinate] = []
+    /// Time left on that route at its average pace; `nil` without a route.
+    private(set) var routeRemainingSeconds: Double?
+    private var route: RideRoute?
+    private var routeSegment = 0
+    private var offRouteFixes = 0
+    private var lastRouteRequest: Date = .distantPast
+    private var routeTask: Task<Void, Never>?
+    private let routes = GooglePlacesClient.app
+    /// Ask Google again at most this often (each request is billed after the free allowance).
+    private let routeRetryInterval: TimeInterval = 120
     private(set) var locationDenied = false
     private(set) var gpsUnavailable = false
     var banner: Banner?
@@ -84,8 +100,10 @@ final class RideRecorder {
 
     // MARK: - Start
 
+    /// `destination`: where the rider is going ("Where to?"), `nil` for "Just ride".
     /// `shareWithFriends`: publish the ride for friends when it ends. `shareLive`: let friends follow it now.
-    func start(name input: String, shareWithFriends: Bool = AppSettings.shareRidesByDefault, shareLive: Bool = false) async throws {
+    func start(name input: String, destination: RideDestination? = nil,
+               shareWithFriends: Bool = AppSettings.shareRidesByDefault, shareLive: Bool = false) async throws {
         guard phase == .idle else { return }
         phase = .starting
         defer { if phase == .starting { phase = .idle } }
@@ -101,8 +119,9 @@ final class RideRecorder {
         let existingNames = ((try? context.fetch(FetchDescriptor<Ride>())) ?? []).map(\.name)
         let name = RideNaming.resolve(input, startedAt: startedAt, existingNames: existingNames)
 
-        var ride = ActiveRide(name: name, startedAt: startedAt)
+        var ride = ActiveRide(name: name, startedAt: startedAt, destination: destination)
         let model = Ride(id: ride.id, name: name, startedAt: startedAt)
+        model.destination = destination
         model.includeScreenshots = AppSettings.includeScreenshots
         model.sharedWithFriends = shareWithFriends && friends.availability == .available
         context.insert(model)
@@ -161,6 +180,7 @@ final class RideRecorder {
             if autoPause.update(speed: stats.currentSpeedMps, at: point.timestamp) {
                 isAutoPaused = autoPause.isPaused
             }
+            updateDestination(from: point)
             liveActivity.update(activityState())
             checkNearbyWishlist(from: point)
             publishLive()
@@ -226,6 +246,51 @@ final class RideRecorder {
         }
         liveActivity.update(activityState(), force: true)
         publishLive()
+    }
+
+    /// Distance left (by road when there's a route, else straight-line), the road ahead for the map,
+    /// and a one-time "Arrived" when the rider gets within 150 m.
+    private func updateDestination(from point: TrackPoint) {
+        guard let destination = active?.destination else { return }
+        remainingMeters = destination.remainingDistance(from: point.coordinate)
+        followRoute(from: point.coordinate, to: destination)
+        guard !hasArrived, destination.isReached(at: point.coordinate) else { return }
+        hasArrived = true
+        banner = Banner(text: "Arrived at \(destination.name)", systemImage: "flag.checkered")
+        // The wishlist alert for the same place would only repeat this.
+        if let spotID = destination.spotID { alertedWishlist.insert(spotID) }
+        liveActivity.alert(title: "You've arrived", body: destination.name, state: activityState())
+    }
+
+    private func followRoute(from position: Coordinate, to destination: RideDestination) {
+        if let route, let progress = route.progress(at: position, after: routeSegment) {
+            if progress.isOffRoute {
+                offRouteFixes += 1
+            } else {
+                offRouteFixes = 0
+                routeSegment = progress.segment
+                remainingMeters = progress.remainingMeters
+                routeAhead = route.ahead(of: progress)
+                routeRemainingSeconds = route.remainingSeconds(for: progress)
+            }
+        }
+        // Fetch the first route, or a new one after a few fixes off it, never more than every 2 min.
+        let needsRoute = route == nil || offRouteFixes >= 3
+        guard needsRoute, routeTask == nil, !hasArrived,
+              Date.now.timeIntervalSince(lastRouteRequest) > routeRetryInterval else { return }
+        lastRouteRequest = .now
+        routeTask = Task { [weak self] in
+            guard let self else { return }
+            let fresh = await routes.route(from: position, to: destination.coordinate)
+            routeTask = nil
+            guard active?.destination == destination, let fresh else { return }
+            route = fresh
+            routeSegment = 0
+            offRouteFixes = 0
+            routeAhead = fresh.coordinates
+            routeRemainingSeconds = fresh.durationSeconds
+            remainingMeters = fresh.distanceMeters
+        }
     }
 
     private func checkNearbyWishlist(from point: TrackPoint) {
@@ -325,6 +390,7 @@ final class RideRecorder {
         let model = rideModel(ride.id) ?? {
             let created = Ride(id: ride.id, name: ride.name, startedAt: ride.startedAt)
             created.albumLocalIdentifier = ride.albumIdentifier
+            created.destination = ride.destination
             context.insert(created)
             return created
         }()
@@ -332,6 +398,7 @@ final class RideRecorder {
         model.apply(RideStats.summarize(points))
         model.trackData = try? TrackCodec.encode(points)
         model.albumSweepUntil = model.endedAt.addingTimeInterval(RideMediaWindow.lateArrivalPeriod)
+        model.destinationReachedAt = ride.destination?.reachedAt(track: points)
         for id in ride.spotIDs {
             if let spot = try? context.fetch(FetchDescriptor<Spot>(predicate: #Predicate { $0.id == id })).first {
                 spot.ride = model
@@ -462,6 +529,21 @@ final class RideRecorder {
         try? context.save()
     }
 
+    /// Saves a reached destination that wasn't a spot yet, dated when the ride got there.
+    @discardableResult
+    func saveDestinationAsSpot(for ride: Ride) -> Spot? {
+        guard let destination = ride.destination, ride.destinationSpotID == nil else { return nil }
+        let spot: Spot
+        switch spots.mark(at: destination.coordinate, status: .visited, name: destination.name, rideID: ride.id,
+                          visitedAt: ride.destinationReachedAt ?? ride.endedAt) {
+        case .created(let created): spot = created
+        case .revisited(let existing): spot = existing
+        }
+        ride.destinationSpotID = spot.id
+        try? context.save()
+        return spot
+    }
+
     func undoAutoVisit(_ spot: Spot, ride: Ride) {
         if let date = spot.visits.first(where: { $0 >= ride.startedAt && $0 <= ride.endedAt }) {
             spot.undoAutoVisit(fromRide: ride.id, on: date)
@@ -487,6 +569,16 @@ final class RideRecorder {
         alertedWishlist = []
         lastNearbyCheck = .distantPast
         banner = nil
+        remainingMeters = nil
+        hasArrived = false
+        routeTask?.cancel()
+        routeTask = nil
+        route = nil
+        routeAhead = []
+        routeRemainingSeconds = nil
+        routeSegment = 0
+        offRouteFixes = 0
+        lastRouteRequest = .distantPast
     }
 
     private func activityState() -> RideActivityAttributes.ContentState {
@@ -497,7 +589,8 @@ final class RideRecorder {
             albumItemCount: albumItemCount,
             lastSpotName: nil,
             usesMetric: AppSettings.usesMetric,
-            sharingLive: isSharingLive
+            sharingLive: isSharingLive,
+            remainingMeters: active?.destination == nil ? nil : (hasArrived ? 0 : remainingMeters)
         )
     }
 

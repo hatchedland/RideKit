@@ -1,4 +1,3 @@
-import MapKit
 import RideKit
 import SwiftUI
 
@@ -9,15 +8,32 @@ struct FriendRideDetailView: View {
     let item: FriendSnapshot.Ride
     @Environment(\.openURL) private var openURL
     @State private var viewing: SharedRide.Photo?
+    @State private var selectedStop: SharedRide.Stop?
 
     private var ride: SharedRide { item.ride }
 
     var body: some View {
         List {
             Section {
-                FriendRideMap(track: item.track, stops: ride.stops)
+                FriendRideMap(track: item.track, stops: ride.stops,
+                              onTapStop: { selectedStop = $0 }, onTapMap: { selectedStop = nil })
                     .frame(height: 280)
                     .listRowInsets(EdgeInsets())
+                    .mapDrawer(item: $selectedStop) { stop in
+                        ScrollView {
+                            FriendStopRow(stop: stop, friendName: friend.name, rideName: ride.name, photos: photos(stop.photoIDs),
+                                          photoFiles: item.photoFiles) { photo in
+                                // The viewer covers the screen, so the drawer steps aside first.
+                                selectedStop = nil
+                                Task {
+                                    try? await Task.sleep(for: .milliseconds(350))
+                                    viewing = photo
+                                }
+                            }
+                            .padding()
+                            .padding(.top, 12)
+                        }
+                    }
             } footer: {
                 Text("\(friend.name) hides the start, the end and private places of every shared ride.")
             }
@@ -239,29 +255,31 @@ private struct FullPhoto: View {
 struct FriendRideMap: View {
     let track: [TrackPoint]
     let stops: [SharedRide.Stop]
+    var onTapStop: ((SharedRide.Stop) -> Void)?
+    var onTapMap: (() -> Void)?
 
     var body: some View {
-        Map(initialPosition: .automatic) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                MapPolyline(coordinates: segment)
-                    .stroke(Brand.asphalt, style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
-                MapPolyline(coordinates: segment)
-                    .stroke(Brand.highwayYellow, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-            }
-            ForEach(stops) { stop in
-                Marker(stop.name.isEmpty ? "Stop" : stop.name,
-                       systemImage: (SpotCategory(rawValue: stop.category) ?? .other).systemImage,
-                       coordinate: stop.coordinate.clCoordinate)
-                    .tint(Brand.asphalt)
-            }
-        }
-        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        GoogleMapView(
+            // A dark casing under the yellow keeps the route visible on light roads.
+            lines: segments.enumerated().map { MapLine(id: "casing-\($0)", coordinates: $1, color: Brand.asphalt, width: 7) }
+                + segments.enumerated().map { MapLine(id: "route-\($0)", coordinates: $1, color: Brand.highwayYellow, width: 4) },
+            pins: stops.map { stop in
+                MapPin(id: stop.id, coordinate: stop.coordinate, title: stop.name.isEmpty ? "Stop" : stop.name,
+                       systemImage: (SpotCategory(rawValue: stop.category) ?? .other).icon, tint: Brand.asphalt)
+            },
+            camera: .fitContent,
+            look: .muted,
+            onTapPin: { id in
+                if let stop = stops.first(where: { $0.id == id }) { onTapStop?(stop) }
+            },
+            onTapMap: { onTapMap?() }
+        )
     }
 
     /// Breaks the line where points were removed (privacy zones) or GPS dropped out.
-    private var segments: [[CLLocationCoordinate2D]] {
-        var result: [[CLLocationCoordinate2D]] = []
-        var current: [CLLocationCoordinate2D] = []
+    private var segments: [[Coordinate]] {
+        var result: [[Coordinate]] = []
+        var current: [Coordinate] = []
         for (index, point) in track.enumerated() {
             if index > 0 {
                 let previous = track[index - 1]
@@ -272,7 +290,7 @@ struct FriendRideMap: View {
                     current = []
                 }
             }
-            current.append(point.coordinate.clCoordinate)
+            current.append(point.coordinate)
         }
         if current.count > 1 { result.append(current) }
         return result
