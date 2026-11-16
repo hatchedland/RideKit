@@ -57,14 +57,18 @@ Setup and release checklist: [README.md](README.md).
   the rider's Supabase project data (`supabase/migrations`, row-level security per rider). Photo and
   video files stay in Photos (only picked friend photos are copied). Offline-first: SwiftData on the
   phone records with no signal and syncs later. CloudKit is being removed (Friends moves to Supabase).
-- **Friends (decided 2026-10-15)**: each rider shares one CloudKit zone ("Friends") with people they
-  invite — friends-only, nothing public, iPhone-only. Sharing is one-way (invite back to see theirs).
-  Friends see shared rides (route, stops, songs, **only photos the rider picked**) and can follow a
-  ride **live** (~1 update/min, chosen on the Start sheet, ends at End or after 12 h). The **first and
-  last 500 m** of every shared ride and everything in **privacy zones** are never shared, live included.
+- **Friends (decided 2026-10-15, on Supabase since 2026-11-16)**: friends-only, nothing public,
+  iPhone-only. A rider invites someone with a code (`friend_invites`, shared as a
+  `ridetracker://invite/<code>` link plus the code for apps that don't make such links tappable —
+  "Paste invite" reads it from the clipboard). Sharing is one-way (`friend_shares`; invite back to see
+  theirs); "Who sees my rides" lists followers with Remove. Friends see **published copies**
+  (`shared_rides`, `shared_media`, bucket `shared`) — route, stops, songs, **only photos the rider
+  picked** — never the rider's own tables, and can follow a ride **live** (`live_rides`, ~1 update/min,
+  chosen on the Start sheet, ends at End or after 12 h). The **first and last 500 m** of every shared ride
+  and everything in **privacy zones** are never shared, live included; the destination never is.
   Shared photos are the one exception to "never copied": 2048 px JPEG copies of the chosen photos only.
   Nothing social on the riding screen beyond a passive "Live" chip; no comments or likes. Every
-  friend's stop has **Add to my wishlist** — that's the point of the feature. Not in the Personal build.
+  friend's stop has **Add to my wishlist** — that's the point of the feature. Works in every build.
 
 ## Tech constraints
 
@@ -102,9 +106,10 @@ Setup and release checklist: [README.md](README.md).
   `SpotCategory.icon`. Generic UI glyphs (share, close, search, checkmark) stay SF Symbols.
 - Debug builds accept `-seedSampleRide` to (re)create and open a sample ride for checking screens in
   the simulator (`RideTracker/App/SampleRide.swift`). `-openTab rides|spots|friends|settings` opens a tab.
-- Build configs: **Debug / Release** use iCloud (`RideTracker.entitlements`). **Personal** (scheme
-  "RideTracker (Personal)", flag `PERSONAL_TEAM`) has no entitlements and local-only SwiftData, for
-  free-Apple-ID device testing. Keep new capabilities out of Personal unless free teams support them.
+- Build configs: **Debug / Release / Personal** all use no entitlements and local SwiftData (the cloud
+  copy is Supabase), so every feature works in **Personal** (scheme "RideTracker (Personal)", flag
+  `PERSONAL_TEAM`) for free-Apple-ID device testing. Keep new capabilities out of Personal unless free
+  teams support them.
 - `RideTracker.xcodeproj` is **generated** by XcodeGen from `project.yml` and not committed. Change
   targets, capabilities, Info.plist keys and entitlements in `project.yml`, then `xcodegen generate`.
 
@@ -114,7 +119,7 @@ Setup and release checklist: [README.md](README.md).
 |---|---|
 | `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`) |
 | `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
-| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `FriendsService` + `FriendsCloud` (CloudKit sharing), `AppSettings` |
+| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `AppSettings` |
 | `RideTracker/Features` | SwiftUI screens: Record, Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |

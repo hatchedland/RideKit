@@ -31,8 +31,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>CKSharingSupported</key>
-	<true/>
 	<key>GMSApiKey</key>
 	<string>$(GMS_API_KEY)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -61,7 +59,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
-		<string>remote-notification</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

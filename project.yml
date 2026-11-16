@@ -81,7 +81,6 @@ targets:
           - gps
         UIBackgroundModes:
           - location
-          - remote-notification
         NSSupportsLiveActivities: true
         NSLocationWhenInUseUsageDescription: >-
           Ride Tracker uses your location to record your route and to save the spots you mark while
@@ -92,8 +91,6 @@ targets:
         NSAppleMusicUsageDescription: >-
           Ride Tracker keeps a list of the songs you play in the Music app during a ride, so you can
           see and replay each ride's soundtrack.
-        # Friend invitations are CloudKit shares; iOS opens them in this app.
-        CKSharingSupported: true
         LSApplicationQueriesSchemes:
           - comgooglemaps
         # Read at launch by GoogleMapsSetup; set in Config/Secrets.xcconfig.
@@ -110,7 +107,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hatchedland.ridetracker
-        # iCloud container iCloud.com.hatchedland.ridetracker + CloudKit + push (edit the file directly)
+        # No capabilities need entitlements any more (iCloud was replaced by Supabase).
         CODE_SIGN_ENTITLEMENTS: RideTracker/Resources/RideTracker.entitlements
         INFOPLIST_KEY_CFBundleDisplayName: Ride Tracker
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
