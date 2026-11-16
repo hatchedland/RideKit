@@ -82,6 +82,9 @@ final class FriendsService {
             requests = try await backend.requests()
             lastRefresh = .now
             lastError = nil
+        } catch where Self.isCancellation(error) {
+            // The tab was rebuilt mid-load and SwiftUI cancelled the request; the next refresh
+            // follows straight away. Not a problem worth a red message.
         } catch {
             lastError = Self.message(for: error)
         }
@@ -273,6 +276,10 @@ final class FriendsService {
     }
 
     // MARK: Errors
+
+    static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
 
     static func message(for error: Error) -> String {
         if let error = error as? URLError, [.notConnectedToInternet, .networkConnectionLost, .timedOut].contains(error.code) {

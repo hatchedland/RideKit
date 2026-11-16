@@ -24,6 +24,12 @@ struct FriendsBackendTests {
         #expect(AccountService.normalisedHandle("  @Rajan_Rides ") == "rajan_rides")
     }
 
+    @MainActor @Test func cancelledLoadsAreNotShownAsErrors() {
+        #expect(FriendsService.isCancellation(CancellationError()))
+        #expect(FriendsService.isCancellation(URLError(.cancelled)))
+        #expect(!FriendsService.isCancellation(URLError(.notConnectedToInternet)))
+    }
+
     @Test func publishedRideMatchesTheSharedRidesTable() throws {
         let ride = SharedRide(id: UUID(), name: "Vainaad", startedAt: .now, endedAt: .now, distanceMeters: 34_800,
                               avgMovingSpeedMps: 12, stops: [], songs: [], photos: [])
