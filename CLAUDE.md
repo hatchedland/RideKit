@@ -124,8 +124,11 @@ Setup and release checklist: [README.md](README.md).
   light background. Signal red is for recording, End and problems only. Big numbers use the expanded
   width (`Brand.readout` / `Brand.stat` / `Brand.label`); everything else is the system font. The
   riding screen is always dark. Weather uses the `Brand.Sky` tokens and the 3D illustrations from
-  `design/make-weather-3d.swift` (Assets.xcassets/Weather). The app icon is the 3D render from `design/make-icon-3d.swift`
-  (chosen 2026-11-16; copy `design/AppIcon-3D.png` into `AppIcon.appiconset/AppIcon.png`). The older flat
+  `design/make-weather-3d.swift` (Assets.xcassets/Weather). The app icon is the **tread-to-pin** 3D render from
+  `design/make-icon-tread.swift` (chosen 2026-11-17: a two-wheeler's tread mark curving up the road
+  to a map pin; highway yellow kept — saffron tested and rejected, too close to Strava's orange; copy
+  `design/AppIcon-Tread.png` into `AppIcon.appiconset/AppIcon.png`). The km-stone stays as the
+  in-app milestone shape; its 3D icon (`design/make-icon-3d.swift`) is retired. The older flat
   version is `design/make-icon.swift`.
 - **Our own icons, not SF Symbols, wherever the brand shows (decided 2026-11-16).** Drawn in code by
   `design/make-icons.swift` (24 pt grid, 2 pt round strokes) into `Assets.xcassets/Icons` as template
@@ -153,7 +156,7 @@ Setup and release checklist: [README.md](README.md).
 | `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |
-| `design` | Art drawn in code: `make-icon-3d.swift` (app icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |
+| `design` | Art drawn in code: `make-icon-tread.swift` (app icon), `make-icon-3d.swift` (retired km-stone icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |
 | `TestRoutes` | GPX files for simulator playback |
 
 ## Commands

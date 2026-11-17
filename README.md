@@ -53,7 +53,7 @@ wide signboard numbers, and a dark "instrument cluster" riding screen. The rules
 | `Shared/` | Code compiled into both the app and the widget (activity attributes, App Intents, brand palette and type) |
 | `RideTrackerTests/` | App-level tests, including schema migration and media export |
 | `TestRoutes/` | GPX routes for simulator location playback |
-| `design/` | Art drawn in code: `make-icon-3d.swift` (the app icon), `make-stone-3d.swift` (the distance stone), `make-weather-3d.swift` (the 3D weather illustrations, written straight into `Assets.xcassets/Weather`), `make-icons.swift` (the line icons). The 3D scripts need Xcode: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift design/make-weather-3d.swift` |
+| `design/` | Art drawn in code: `make-icon-tread.swift` (the app icon: a tread mark ending in a map pin), `make-icon-3d.swift` (the retired km-stone icon), `make-stone-3d.swift` (the distance stone), `make-weather-3d.swift` (the 3D weather illustrations, written straight into `Assets.xcassets/Weather`), `make-icons.swift` (the line icons). The 3D scripts need Xcode: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift design/make-weather-3d.swift` |
 | `project.yml` | XcodeGen definition. The `.xcodeproj` is generated, not committed |
 
 ## Getting started
