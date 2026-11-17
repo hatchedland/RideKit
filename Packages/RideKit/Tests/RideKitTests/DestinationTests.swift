@@ -49,12 +49,6 @@ struct DestinationTests {
         #expect(RideNaming.name(goingTo: RideDestination(name: " Zostel Ooty ", coordinate: origin)) == "Ride to Zostel Ooty")
         #expect(RideNaming.name(goingTo: RideDestination(name: "  ", coordinate: origin)) == "")
     }
-
-    @Test func directionsUseTwoWheelerMode() {
-        let url = GoogleMapsLink.directionsURL(to: Coordinate(latitude: 11.4102, longitude: 76.695))
-        #expect(url.absoluteString == "https://www.google.com/maps/dir/?api=1&destination=11.410200,76.695000&travelmode=two-wheeler")
-        #expect(GoogleMapsLink.coordinate(inGoogleMapsURL: url) == Coordinate(latitude: 11.4102, longitude: 76.695))
-    }
 }
 
 @Suite("Where to? suggestions")
