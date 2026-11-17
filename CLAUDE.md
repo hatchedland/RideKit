@@ -8,8 +8,11 @@ Setup and release checklist: [README.md](README.md).
 - **Spots are the core.** Every spot stores a Google Maps URL built with the official Maps URLs format
   (`https://www.google.com/maps/search/?api=1&query=lat,lon`); the link itself needs no API.
 - **Maps inside the app are Google Maps (decided 2026-11-12)**: Maps SDK for iOS through the shared
-  `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. Directions hand off to the Google
-  Maps app via Maps URLs. **Place search and suggested spot / stop names use Google Places (API
+  `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. **Directions stay in the app
+  (decided 2026-11-17)**: a spot's Directions button opens `RoutePreviewSheet` — the Google Routes
+  two-wheeler route on the map, distance and time, and one **Start ride** that rides there (the riding
+  screen shows the road ahead and what's left). No turn-by-turn voice. The Start sheet's optional
+  "Directions in Google Maps" toggle is the only hand-off to the Google Maps app. **Place search and suggested spot / stop names use Google Places (API
   New, decided 2026-11-16)** through RideKit `GooglePlaces` + `GooglePlacesClient` (plain URLSession,
   same key, `X-Ios-Bundle-Identifier`), nearby names limited to `GooglePlaces.riderTypes`; results
   shown off a Google map carry "Results from Google Maps". Addresses and towns stay on Apple's
