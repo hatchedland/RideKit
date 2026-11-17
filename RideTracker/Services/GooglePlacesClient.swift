@@ -59,17 +59,23 @@ struct GooglePlacesClient: Sendable {
 extension GooglePlacesClient {
     /// A two-wheeler route from Google's Routes API (same key); `nil` offline or on any failure,
     /// in which case the ride falls back to the straight-line distance.
+    /// Two-wheeler first; where Google has none (it offers two-wheeler routing only in some
+    /// countries — not the US, for one) a drive route still shows the way.
     func route(from origin: Coordinate, to destination: Coordinate) async -> RideRoute? {
         guard let apiKey else { return nil }
-        let request = GoogleRoutes.request(from: origin, to: destination, apiKey: apiKey, bundleID: bundleID,
-                                           languageCode: Locale.current.language.languageCode?.identifier ?? "en")
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-            return try GoogleRoutes.route(from: data)
-        } catch {
-            return nil
+        for mode in GoogleRoutes.TravelMode.allCases {
+            let request = GoogleRoutes.request(from: origin, to: destination, mode: mode, apiKey: apiKey, bundleID: bundleID,
+                                               languageCode: Locale.current.language.languageCode?.identifier ?? "en")
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+                if let route = try GoogleRoutes.route(from: data) { return route }
+            } catch {
+                return nil
+            }
         }
+        // No road at all (e.g. across an ocean): the ride shows the straight-line distance.
+        return nil
     }
 }
 
