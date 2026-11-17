@@ -16,8 +16,10 @@ struct RecordView: View {
     }
 }
 
-/// Before a ride: the map, the wishlist on it, and one big Start ride button. Many rides have no
-/// destination, so where to go is an optional part of the next step, never a gate.
+/// Before a ride, a dashboard for the questions a rider has before setting off: can I ride now
+/// (weather), how am I doing (ODO/TRIP), where could I go (nearest wishlist spots), and one big
+/// Start ride button. No map: it lives in Spots, and fills the screen once riding. Many rides have
+/// no destination, so where to go is an optional part of the next step, never a gate.
 private struct ReadyView: View {
     @Environment(RideRecorder.self) private var recorder
     @Query(filter: #Predicate<Spot> { $0.statusRaw == "wantToGo" }, sort: \Spot.createdAt, order: .reverse)
@@ -26,7 +28,8 @@ private struct ReadyView: View {
     @Query(filter: #Predicate<Spot> { $0.nameIsSuggested == true }, sort: \Spot.createdAt, order: .reverse)
     private var unnamed: [Spot]
     @State private var showingStart = false
-    @State private var selectedSpot: Spot?
+    /// The next 12 hours here; `nil` while loading, empty when unavailable.
+    @State private var forecast: [WeatherHour]?
     /// Set when the ride is started from the display's NEXT row.
     @State private var startDestination: RideDestination?
     @State private var showingToName = false
@@ -34,61 +37,51 @@ private struct ReadyView: View {
     /// "Ooty, The Nilgiris": where the rider is, shown as the screen's title.
     @State private var placeName: String?
 
-    private var next: DestinationSuggestions.Suggestion? {
+    /// The three nearest wishlist spots (newest first until the location is known).
+    private var nearby: [DestinationSuggestions.Suggestion] {
         DestinationSuggestions.suggestions(
             query: "",
             wishlist: wishlist.map { RideDestination(name: $0.displayName, coordinate: $0.coordinate, spotID: $0.id) },
-            recent: [], from: here, wishlistLimit: 1
-        ).first
+            recent: [], from: here, wishlistLimit: 3
+        )
+        .filter { $0.source == .wishlist }
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-            // The instrument display sits above the map, like a bike's cluster above the road.
-            if !rides.isEmpty || next != nil {
-                RideDisplay(rides: rides, next: next, toName: unnamed.count,
-                            onNext: { destination in
-                                startDestination = destination
-                                showingStart = true
-                            },
-                            onToName: { showingToName = true })
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-            }
-            // Muted so the wishlist and the Start button carry the colour; the button floats over it.
-            GoogleMapView(
-                pins: wishlist.map {
-                    MapPin(id: $0.id.uuidString, coordinate: $0.coordinate, title: $0.displayName,
-                           systemImage: $0.category.icon, tint: Brand.highwayYellow)
-                },
-                camera: .userLocation,
-                look: .muted,
-                showsUserLocation: true,
-                showsLocationButton: true,
-                showsCompass: true,
-                padding: UIEdgeInsets(top: 0, left: 0, bottom: 150, right: 0),
-                onTapPin: { id in selectedSpot = wishlist.first { $0.id.uuidString == id } },
-                onTapMap: { selectedSpot = nil }
-            )
-            .ignoresSafeArea(edges: .horizontal)
-            .mapDrawer(item: $selectedSpot) { SpotDrawer(spot: $0) }
-            .overlay(alignment: .bottom) {
-                VStack(spacing: 12) {
-                    Button {
-                        showingStart = true
-                    } label: {
-                        Label("Start ride", systemImage: "play.fill")
-                            .font(.title2.bold().width(.expanded))
-                            .foregroundStyle(Brand.asphalt)
-                            .frame(maxWidth: .infinity, minHeight: 64)
+            ScrollView {
+                VStack(spacing: 16) {
+                    PreRideWeatherCard(forecast: forecast)
+                    if !rides.isEmpty || !unnamed.isEmpty {
+                        RideDisplay(rides: rides, next: nil, toName: unnamed.count,
+                                    onNext: { _ in }, onToName: { showingToName = true })
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Brand.highwayYellow)
-                    .disabled(recorder.phase != .idle)
+                    NearbyWishlist(suggestions: nearby,
+                                   categories: Dictionary(wishlist.map { ($0.id, $0.category.icon) }, uniquingKeysWith: { a, _ in a }),
+                                   onPick: { destination in
+                                       startDestination = destination
+                                       showingStart = true
+                                   })
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
+            // Start ride stays where the thumb expects it, over the bottom of the dashboard.
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    showingStart = true
+                } label: {
+                    Label("Start ride", systemImage: "play.fill")
+                        .font(.title2.bold().width(.expanded))
+                        .foregroundStyle(Brand.asphalt)
+                        .frame(maxWidth: .infinity, minHeight: 64)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Brand.highwayYellow)
+                .disabled(recorder.phase != .idle)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Brand.page.opacity(0.94))
             }
             .background(Brand.page)
             .navigationTitle("Ride")
@@ -117,7 +110,11 @@ private struct ReadyView: View {
             .sheet(isPresented: $showingToName) { SpotsToName(spots: unnamed) }
             .task {
                 here = await CurrentLocation.once()
-                if let here { placeName = await SpotService.reverseGeocode(here).locality }
+                guard let here else { forecast = []; return }
+                async let place = SpotService.reverseGeocode(here).locality
+                async let hours = GooglePlacesClient.app.forecastHours(at: here, hours: 12)
+                forecast = await hours
+                placeName = await place
             }
         }
     }

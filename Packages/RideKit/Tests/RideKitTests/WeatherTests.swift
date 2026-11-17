@@ -165,6 +165,24 @@ struct WeatherTests {
                                    state: &state)?.kind == .rain)
     }
 
+    // MARK: Before a ride
+
+    @Test func outlookPicksTheMostSeriousThingAhead() {
+        let fine = [hour(0), hour(1), hour(2)]
+        #expect(WeatherAlerts.outlook(fine, now: now) == nil)
+        let rainLater = [hour(0), hour(1), hour(3, "RAIN", rain: 70)]
+        #expect(text(WeatherAlerts.outlook(rainLater, now: now)) == "Rain from 18:30 · 70% chance")
+        // Beyond the window it's not news yet.
+        #expect(WeatherAlerts.outlook([hour(0), hour(8, "RAIN", rain: 90)], now: now) == nil)
+        // A storm later beats rain sooner; rain beats heat.
+        let mixed = [hour(0, feels: 39), hour(1, "RAIN", rain: 70), hour(4, "THUNDERSTORM", rain: 80, thunder: 70)]
+        #expect(WeatherAlerts.outlook(mixed, now: now)?.kind == .storm)
+        #expect(WeatherAlerts.outlook([hour(0, feels: 39), hour(1, "RAIN", rain: 70)], now: now)?.kind == .rain)
+        #expect(text(WeatherAlerts.outlook([hour(0, feels: 40.2)], now: now)) == "Feels like 40° · Take a water break")
+        // Raining already: "now".
+        #expect(text(WeatherAlerts.outlook([hour(0, "RAIN", rain: 90)], now: now)) == "Rain now · 90% chance")
+    }
+
     // MARK: Sunset
 
     @Test func sunsetOnceInTheLastHalfHourWithDistanceLeft() {

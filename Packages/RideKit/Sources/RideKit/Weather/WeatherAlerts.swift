@@ -141,6 +141,28 @@ public enum WeatherAlerts {
         }
     }
 
+    /// Before a ride: the one thing worth knowing about the next `hours` hours, most serious first
+    /// (storm, rain, wind, heat), e.g. "Rain from 4 pm · 70% chance"; `nil` when it stays fine.
+    public static func outlook(_ forecast: [WeatherHour], now: Date, hours: Double = 6) -> WeatherAlert? {
+        let ahead = forecast
+            .filter { $0.end > now && $0.start < now.addingTimeInterval(hours * 3_600) }
+            .sorted { $0.start < $1.start }
+        func at(_ hour: WeatherHour) -> Date? { hour.start > now ? hour.start : nil }
+        if let storm = ahead.first(where: \.isStormy) {
+            return WeatherAlert(kind: .storm, at: at(storm), percent: storm.rainChance)
+        }
+        if let rain = ahead.first(where: \.isRainy) {
+            return WeatherAlert(kind: .rain, at: at(rain), percent: rain.rainChance)
+        }
+        if let gust = ahead.compactMap(\.gustKmh).max(), gust >= gustKmh {
+            return WeatherAlert(kind: .wind, value: gust)
+        }
+        if let feels = ahead.compactMap(\.feelsLike).max(), feels >= feelsLikeHeat {
+            return WeatherAlert(kind: .heat, value: feels)
+        }
+        return nil
+    }
+
     /// The forecast hour covering `now`, for the riding screen's readout; `nil` without one.
     public static func current(_ forecast: [WeatherHour], now: Date) -> WeatherHour? {
         forecast.first { $0.start <= now && now < $0.end }

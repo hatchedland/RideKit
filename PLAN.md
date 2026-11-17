@@ -5,12 +5,25 @@ record your route and mark **spots** (landmarks, viewpoints, dhabas, fuel stops)
 spot saves its exact location and a **Google Maps link**. Your **photos and videos are organised
 automatically** by the spot and ride where you took them.
 
-Data stays on the device and syncs through the user's own iCloud. The app is built for
-**App Store release**.
+Riders sign in with an account; the phone records offline and syncs to the rider's own rows in
+Supabase. The app is built for **App Store release**.
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-11-17. `CLAUDE.md` holds the current product rules; where this plan differs,
+`CLAUDE.md` wins._
 
-> **Status:** v1.0.0 and **v1.1.0 are released** on `main`. The **Milestone brand** and the **photo
+> **Changed since this plan was written:**
+> - **2026-11-12:** maps inside the app are **Google Maps** (Maps SDK for iOS), not MapKit.
+> - **2026-11-16:** **an account is required** (Supabase Auth, passwordless email link) and
+>   everything syncs to **Supabase**; **CloudKit and iCloud sync are gone**. Friends moved to
+>   Supabase too: riders find each other by **@handle** and send friend requests (no iCloud invite
+>   links). **Google Places** (API New) does place search and suggested names.
+> - **2026-11-17:** **Google Weather** powers weather alerts while riding and the pre-ride weather;
+>   **famous places ahead** alerts (Google Places, ≥ 500 reviews, ≥ 4.0, within 2 km, 3 nearest);
+>   the riding screen became a full-height map with one control row and no tab bar; the **Ride tab
+>   is a pre-ride dashboard** (weather, ODO/TRIP, nearest wishlist spots) instead of a map; a
+>   read-only now-playing line instead of music controls.
+
+> **Status (as of 2026-10-15; see the changes above):** v1.0.0 and **v1.1.0 are released** on `main`. The **Milestone brand** and the **photo
 > trail** are merged into `dev` and going to `main` (version not bumped yet). The app runs on the
 > owner's iPhone through the free **Personal** build (no paid Apple Developer Program yet, so iCloud
 > sync, TestFlight and the App Store are on hold). Real-ride field testing is in progress.
@@ -50,18 +63,20 @@ _Last updated: 2026-10-15_
 | Area | Decision | Why |
 |---|---|---|
 | Platform | iOS 26+, iPhone first, Swift 6.2, SwiftUI | Newest APIs, no fallback code needed |
-| Persistence | SwiftData + CloudKit (private database) | No backend, no login, private by default |
-| Friends | CloudKit **sharing**: one zone per rider, shared with invited friends (decided 2026-10-15) | Social without a backend or accounts; friends-only by construction; no public content to moderate. Costs: iPhone-only friends, ~1 min live latency |
+| Persistence | SwiftData on the phone (offline-first) + **Supabase** per-rider rows with row-level security (changed 2026-11-16; was SwiftData + CloudKit) | One account across devices, friends without iCloud, works in the free Personal build |
+| Friends | **Supabase**: friend requests by @handle, mutual, published copies in `shared_rides` / `shared_media` / `live_rides` (changed 2026-11-16; was CloudKit sharing, decided 2026-10-15) | Friends-only by construction; no public content to moderate. Costs: iPhone-only friends, ~1 min live latency |
 | Location tracking | `CLLocationUpdate.liveUpdates()` + `CLBackgroundActivitySession` | Tracks in the background with only "When In Use" permission |
-| Place names | MapKit `MKReverseGeocodingRequest` + `MKLocalPointsOfInterestRequest` | Free and built in. Suggests a landmark name for a new spot (`CLGeocoder` is deprecated in iOS 26) |
+| Place names | Addresses and towns: MapKit `MKReverseGeocodingRequest` (`CLGeocoder` is deprecated in iOS 26). Landmark names, place search and famous places: **Google Places (API New)** (changed 2026-11-16; was `MKLocalPointsOfInterestRequest`) | Free reverse geocoding; Google knows far more Indian landmarks |
+| Weather | **Google Weather** hourly forecast, same key (decided 2026-11-17) | Works in the free Personal build (WeatherKit needs a paid-team capability) |
 | Google Maps link | Built from coordinates using the official [Maps URLs](https://developers.google.com/maps/documentation/urls) format | Works everywhere, with **no API key and no cost** |
 | Photos/videos | **Reference** items in the Photos library through PhotoKit; don't copy them | No duplicate storage, no iCloud quota blow-up, and edits made in Photos still show up |
 | Organising in Photos | **Automatic album per ride** in a "Ride Tracker" folder in the Photos app, containing everything captured between ride start and end | Your organisation stays visible outside our app too |
-| Maps | MapKit for SwiftUI, with spot clustering | No API keys |
-| Dependencies | Apple frameworks only | Simpler review and privacy story |
+| Maps | **Google Maps SDK for iOS** (changed 2026-11-12; was MapKit for SwiftUI) | The maps riders already use; one key for maps, places, routes and weather |
+| Dependencies | Apple frameworks, plus the Google Maps SDK and supabase-swift | Simpler review and privacy story |
 
 **Not in v1:** a backend or accounts, Google Places API lookups (they need a paid key), turn-by-turn
-navigation, and crash detection. (Social arrived later as **Friends**, still without a backend.)
+navigation, and crash detection. (Social arrived later as **Friends**; accounts, a Supabase backend
+and Google Places arrived on 2026-11-16.)
 
 ---
 
@@ -89,7 +104,7 @@ navigation, and crash detection. (Social arrived later as **Friends**, still wit
 **B. Wishlist (core)**
 - Every spot has a status: **Want to go** or **Visited**.
 - Wishlist spots can be added at any time, without a ride: paste a Google Maps link, long-press the
-  map, or search by name (`MKLocalSearch`).
+  map, or search by name (Google Places since 2026-11-16; was `MKLocalSearch`).
 - The map shows wishlist and visited spots in different colours, and you can filter by status.
 - **Auto-visit:** when a recorded ride passes within the radius of a wishlist spot (default 150 m),
   the spot is switched to **Visited** with that ride and date attached. You confirm or undo this on
@@ -154,8 +169,8 @@ navigation, and crash detection. (Social arrived later as **Friends**, still wit
 
 **F. Live Activity / Dynamic Island:** speed, distance and time, the photo count in the ride album, and the **Mark spot** button.
 
-**G. iCloud sync and export:** spots (including the wishlist), rides and links sync across your
-devices. Spots can be exported as GPX or KML, which **imports into Google My Maps**.
+**G. Sync and export:** spots (including the wishlist), rides and links sync across your
+devices (through Supabase since 2026-11-16; originally iCloud). Spots can be exported as GPX or KML, which **imports into Google My Maps**.
 
 ### v1.1.0 (released)
 - **Share photos and videos** from a ride or spot to any app (WhatsApp, Instagram, Messages, AirDrop,
@@ -180,9 +195,10 @@ Beacon, Riser, REVER). What nobody does well is **where my friends stopped, what
 stealing their spots for my wishlist**. That loop is the point: friend's ride → your wishlist → your
 ride → their feed.
 
-- **Invite:** Friends tab › Invite a friend sends an iCloud share link (WhatsApp, Messages…). Sharing is
-  one-way; after accepting, the app prompts "Invite <name> back". "Who sees my rides" is Apple's
-  participant list (remove anyone). Swipe a friend › "Stop seeing" leaves their share.
+- **Finding friends (changed 2026-11-16):** every rider picks a unique **@handle**; riders search
+  for each other in the app (handle + name, never email) and send a **friend request**; accepting
+  makes them friends both ways. Remove friend ends it both ways. (Originally: one-way iCloud share
+  links with "Invite <name> back".)
 - **Phase 1 – shared rides:** chosen on the Start sheet ("Share with friends after the ride", default
   in Settings) or later from ride detail. Friends see the route, stats, stops (as a trail), soundtrack
   and **only the photos the rider picks** (2048 px JPEG copies; videos as a still frame). Every stop
@@ -195,12 +211,13 @@ ride → their feed.
 - **Privacy:** the first and last **500 m** of every shared ride are cut (Settings toggle, on by
   default), and **privacy zones** (Settings › Friends, 500 m, "Add current location") hide route,
   stops, photos and live position. No comments or likes in v1 (no moderation burden).
-- **Data:** zone "Friends" in the private DB, shared zone-wide. Records: `SharedRide` (JSON payload,
-  redacted track asset, photo assets), `LiveRide` (JSON). Schema V3 adds `Ride.sharedWithFriends`,
+- **Data (changed 2026-11-16):** Supabase tables `shared_rides`, `shared_media`, `live_rides`,
+  `friend_requests` and the `shared` storage bucket, all behind row-level security. (Originally a
+  "Friends" CloudKit zone with `SharedRide` and `LiveRide` records.) Schema V3 adds `Ride.sharedWithFriends`,
   `Ride.sharedAt`, `MediaLink.sharedWithFriends`. Friends refresh on open and every 30 s while the tab
   is visible (no push yet).
-- **Not done yet:** push updates for friends' rides (CloudKit database subscription), reactions,
-  testing on two real devices (needs the paid Developer Program, two Apple IDs).
+- **Not done yet:** push updates for friends' rides, reactions, and testing on two real devices with
+  two accounts.
 - **Phase 3 – group rides (planned):** one live map for the whole group and a shared album for the
   ride. This is where it could become the app a riding group uses together.
 
@@ -257,7 +274,7 @@ ride → their feed.
   │             └─────┬────────┘  └──────┬─────────┘
   │                   └─────────┬────────┘
   │                      ┌──────▼──────┐
-  ├─ LocationService     │  SwiftData  │◀──▶ CloudKit (private DB)
+  ├─ LocationService     │  SwiftData  │◀──▶ Supabase (rider's rows, RLS)
   ├─ TrackBuffer (disk)  └─────────────┘
   └─ LiveActivityController ◀── MarkSpotIntent (Lock Screen / Action button / Siri)
 ```
@@ -363,9 +380,10 @@ time, seconds listened, where it started) and `Ride.songs`, with a lightweight m
 Other requirements:
 - `LSApplicationQueriesSchemes`: `comgooglemaps` (to open the Google Maps app).
 - `NSSupportsLiveActivities = YES`.
-- iCloud / CloudKit capability.
-- `PrivacyInfo.xcprivacy`: precise location and photos are used on-device only, are not linked to
-  identity, and are not used for tracking.
+- No iCloud / CloudKit capability (removed 2026-11-16); no entitlements, so the free Personal build
+  has every feature.
+- `PrivacyInfo.xcprivacy`: the account email; rides, spots and photo links synced to the rider's
+  own Supabase rows; location sent to Google for places, routes and weather. Not used for tracking.
 
 ---
 
@@ -382,7 +400,7 @@ Other requirements:
 | **Limited Photos access** | Detect it, explain what won't work, and offer `PHPicker` for manual adding. |
 | **Pasted short links** (`maps.app.goo.gl`) | Follow the redirect with a `HEAD` request and parse the final URL. If no coordinates are found, ask the user to drop a pin. |
 | **Background survival and battery** | `CLBackgroundActivitySession`, append-only disk buffer, 1 Hz UI updates, and field testing for battery % per hour. |
-| **CloudKit schema is permanent once in production** | Finalise the models before release and use a `VersionedSchema` from day one. |
+| **Schema changes after release** (SwiftData on the phone, Supabase tables) | Additive-only `VersionedSchema` migrations with a test each; Supabase changes as migrations in `supabase/migrations`. (Originally: CloudKit's permanent production schema.) |
 | **App Review** (background location, full Photos access) | Both are clearly core features. Write precise purpose strings and include a demo video in the review notes. |
 
 ---
@@ -434,7 +452,7 @@ TestFlight. Milestone 9 hasn't started.
       `sudo xcode-select -s /Applications/Xcode.app`.
 - [x] App name and bundle ID: **Ride Tracker**, `com.hatchedland.ridetracker`.
 - [x] An iPhone for testing (iPhone 16, free Personal Team build).
-- [ ] **Apple Developer Program** ($99/yr). Needed for iCloud sync, **Friends**, TestFlight and the App Store.
+- [ ] **Apple Developer Program** ($99/yr). Needed for TestFlight and the App Store (sync and Friends run on Supabase since 2026-11-16, so they work without it).
 - [ ] A privacy policy URL before submission.
 - [ ] A phone mount and a few real rides for testing.
 
@@ -445,13 +463,14 @@ TestFlight. Milestone 9 hasn't started.
 - Spot radius for attaching photos and auto-visit: **150 m** (adjustable in Settings).
 - Rides are **named by you when starting**, and the Photos album uses the same name.
 - No GoPro or action-camera support. The wishlist is in v1. Albums are created automatically for every ride.
-- Testing happens on the owner's iPhone with a **free Apple ID** (Personal build, no iCloud). There's
-  no TestFlight or other testers for now.
+- Testing happens on the owner's iPhone with a **free Apple ID** (Personal build, every feature
+  since the move to Supabase). There's no TestFlight or other testers for now.
 - Shared photos and videos are the **original files**, sent through the system share sheet.
 - The ride soundtrack covers the **Music app only**, songs count after 30 s, and it's on by default.
 - The app is **for motorcycles and scooters only**: no car mode or vehicle type (decided 2026-10-13).
-- **Friends** via CloudKit sharing, no backend; chosen photos are copied for friends (the only
-  exception to "reference, never copy"); live sharing in the first Friends release (decided 2026-10-15).
+- **Friends**: chosen photos are copied for friends (the only exception to "reference, never copy");
+  live sharing in the first Friends release (decided 2026-10-15). Originally via CloudKit sharing;
+  on Supabase with @handle friend requests since 2026-11-16.
 - Ride photos are shown as a **trail** by default; unnamed photo stops are **suggested, never
   auto-saved** as spots; photos without GPS are placed in the trail by time but stay off the map.
 

@@ -92,7 +92,14 @@ public enum GoogleRoutes {
     static let fieldMask = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline"
 
     /// A two-wheeler route (motorcycles and scooters, where Google supports it, as in India).
-    public static func request(from origin: Coordinate, to destination: Coordinate,
+    /// Google's travel modes the app asks for, in order: two-wheeler first; Google only offers it in
+    /// some countries (India yes, the US no), so where it has no route the app asks for a drive.
+    public enum TravelMode: String, CaseIterable, Sendable {
+        case twoWheeler = "TWO_WHEELER"
+        case drive = "DRIVE"
+    }
+
+    public static func request(from origin: Coordinate, to destination: Coordinate, mode: TravelMode = .twoWheeler,
                                apiKey: String, bundleID: String, languageCode: String = "en") -> URLRequest {
         func waypoint(_ c: Coordinate) -> [String: Any] {
             ["location": ["latLng": ["latitude": c.latitude, "longitude": c.longitude]]]
@@ -100,7 +107,7 @@ public enum GoogleRoutes {
         let body: [String: Any] = [
             "origin": waypoint(origin),
             "destination": waypoint(destination),
-            "travelMode": "TWO_WHEELER",
+            "travelMode": mode.rawValue,
             "languageCode": languageCode,
             "units": "METRIC",
         ]
