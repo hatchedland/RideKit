@@ -77,12 +77,12 @@ extension GooglePlacesClient {
     /// The next 3 hours of Google Weather at `coordinate`; empty offline or on any failure (the ride
     /// just gets no weather alerts). Debug builds launched with `-fakeWeather rain|rainSoon|storm|wind|heat|clearing|sunny|night|cloudy|sunset`
     /// get a made-up forecast instead, to see each alert in the simulator.
-    func forecastHours(at coordinate: Coordinate) async -> [WeatherHour] {
+    func forecastHours(at coordinate: Coordinate, hours: Int = 3) async -> [WeatherHour] {
         #if DEBUG
         if let fake = UserDefaults.standard.string(forKey: "fakeWeather") { return FakeWeather.hours(fake, now: .now) }
         #endif
         guard let apiKey else { return [] }
-        let request = GoogleWeather.hoursRequest(at: coordinate, apiKey: apiKey, bundleID: bundleID,
+        let request = GoogleWeather.hoursRequest(at: coordinate, hours: hours, apiKey: apiKey, bundleID: bundleID,
                                                  languageCode: Locale.current.language.languageCode?.identifier ?? "en")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
