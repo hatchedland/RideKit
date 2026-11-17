@@ -104,6 +104,10 @@ Setup and release checklist: [README.md](README.md).
 - **Accounts (decided 2026-11-16): Supabase Auth, passwordless email link** (`AccountService`,
   `ridetracker://auth-callback`). Free projects can't customise the default email template, so the
   6-digit code waits for an own SMTP sender (before App Store). Signed out, only the sign-in screen shows.
+  **Delete account (2026-11-17, guideline 5.1.1(v))**: Settings › Delete account removes the rider's
+  Storage files (tracks, shared), then `delete_my_account()` deletes the auth user, which cascades to
+  every row of theirs; then this phone's copy is erased. Photos and Ride Tracker albums stay. Every
+  new table must reference `auth.users` with `on delete cascade`, or deletion leaves data behind.
 - Always the latest non-deprecated APIs, e.g. `CLLocationUpdate.liveUpdates` + `CLServiceSession` +
   `CLBackgroundActivitySession` (only "When In Use" permission — never ask for "Always"),
   `MKReverseGeocodingRequest` (not `CLGeocoder`), `MKMapItem.location` / `.address` (not `placemark`).
