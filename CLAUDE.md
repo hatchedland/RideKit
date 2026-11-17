@@ -12,7 +12,14 @@ Setup and release checklist: [README.md](README.md).
   (decided 2026-11-17)**: a spot's Directions button opens `RoutePreviewSheet` — the Google Routes
   two-wheeler route on the map, distance and time, and one **Start ride** that rides there (the riding
   screen shows the road ahead and what's left). No turn-by-turn voice. The Start sheet's optional
-  "Directions in Google Maps" toggle is the only hand-off to the Google Maps app. **Place search and suggested spot / stop names use Google Places (API
+  "Directions in Google Maps" toggle is the only hand-off to the Google Maps app.
+- **Honest arrival time (decided 2026-11-17)**: wherever a route to a destination is shown before a
+  ride (route preview, Start sheet), say how long it really takes and whether it ends in daylight
+  (`RideTimePlan`, `ArrivalEstimateView`). Google's road time is the floor; the rider's own pace from
+  their last 20 rides of ≥ 20 km (`RidePace`: distance-weighted moving speed, median share of time
+  stopped) is averaged in, capped at 1.6× Google. Without 2 such rides: 15% stopped (about 10 min an
+  hour). Sunset at the destination, 20 min margin: "After dark. Leave by 1:20 pm to arrive in
+  daylight." No verdict for rides over 14 h. Before the ride only — nothing new on the riding screen. **Place search and suggested spot / stop names use Google Places (API
   New, decided 2026-11-16)** through RideKit `GooglePlaces` + `GooglePlacesClient` (plain URLSession,
   same key, `X-Ios-Bundle-Identifier`), nearby names limited to `GooglePlaces.riderTypes`; results
   shown off a Google map carry "Results from Google Maps". Addresses and towns stay on Apple's
@@ -150,7 +157,7 @@ Setup and release checklist: [README.md](README.md).
 
 | Path | Purpose |
 |---|---|
-| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
+| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, arrival time (`RidePace`, `RideTimePlan`), GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
 | `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
 | `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `AppSettings` |
 | `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
