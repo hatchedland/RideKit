@@ -269,7 +269,6 @@ private struct RouteKey: Equatable {
 private struct StartRideSheet: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     let wishlist: [RideDestination]
     let recent: [RideDestination]
     /// Pre-picked, e.g. from the display's NEXT row; can still be removed.
@@ -284,7 +283,6 @@ private struct StartRideSheet: View {
     /// The rider typed a name; picking a destination won't overwrite it.
     @State private var nameEdited = false
     @State private var shareLive = false
-    @AppStorage(AppSettings.Key.openDirectionsOnStart) private var openDirections = false
     @State private var error: String?
     /// The road to the picked destination, for the arrival estimate.
     @State private var route: RideRoute?
@@ -381,7 +379,6 @@ private struct StartRideSheet: View {
                 if let route {
                     ArrivalEstimateView(destination: destination, route: route, prominent: false)
                 }
-                Toggle("Directions in Google Maps", systemImage: "arrow.triangle.turn.up.right.diamond", isOn: $openDirections)
             }
         } else {
             Section {
@@ -473,9 +470,6 @@ private struct StartRideSheet: View {
                 try await recorder.start(name: name, destination: destination,
                                          shareWithFriends: AppSettings.shareRidesByDefault, shareLive: shareLive)
                 dismiss()
-                if let destination, openDirections {
-                    openURL(GoogleMapsLink.directionsURL(to: destination.coordinate))
-                }
             } catch {
                 self.error = "Couldn't start the ride: \(error.localizedDescription)"
             }

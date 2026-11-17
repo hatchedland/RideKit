@@ -16,8 +16,6 @@ enum AppSettings {
         static let shareRidesByDefault = "settings.friends.shareRidesByDefault"
         static let hideRideEnds = "settings.friends.hideRideEnds"
         static let privacyZones = "settings.friends.privacyZones"
-        /// Start sheet: open Google Maps directions to the destination when the ride starts.
-        static let openDirectionsOnStart = "settings.openDirectionsOnStart"
     }
 
     /// Always kilometres and km/h: riders here think in km (decided 2026-11-16, no setting).

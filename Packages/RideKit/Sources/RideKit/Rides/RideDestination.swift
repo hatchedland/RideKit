@@ -92,17 +92,3 @@ extension RideNaming {
         return place.isEmpty ? "" : "Ride to \(place)"
     }
 }
-
-extension GoogleMapsLink {
-    /// Turn-by-turn directions in Google Maps from the rider's current location, routed for
-    /// motorcycles and scooters where Google supports it (`two-wheeler`), by car elsewhere.
-    public static func directionsURL(to destination: Coordinate) -> URL {
-        var components = URLComponents(string: "https://www.google.com/maps/dir/")!
-        components.queryItems = [
-            URLQueryItem(name: "api", value: "1"),
-            URLQueryItem(name: "destination", value: destination.queryString),
-            URLQueryItem(name: "travelmode", value: "two-wheeler"),
-        ]
-        return components.url!
-    }
-}
