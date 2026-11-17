@@ -7,6 +7,7 @@ enum AppSettings {
         static let autoPause = "settings.autoPauseSensitivity"
         static let includeScreenshots = "settings.includeScreenshots"
         static let nearbyAlerts = "settings.nearbyAlerts"
+        static let famousPlaceAlerts = "settings.famousPlaceAlerts"
         static let spotRadius = "settings.spotRadius"
         static let hasSeenSafetyNotice = "settings.hasSeenSafetyNotice"
         static let trackSongs = "settings.trackSongs"
@@ -32,6 +33,11 @@ enum AppSettings {
 
     static var nearbyAlerts: Bool {
         defaults.object(forKey: Key.nearbyAlerts) as? Bool ?? true
+    }
+
+    /// Announce well-reviewed sights within 2 km ahead while riding (Google Places).
+    static var famousPlaceAlerts: Bool {
+        defaults.object(forKey: Key.famousPlaceAlerts) as? Bool ?? true
     }
 
     /// Log songs played in the Music app during rides.

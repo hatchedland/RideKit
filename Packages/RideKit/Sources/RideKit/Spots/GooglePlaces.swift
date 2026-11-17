@@ -10,13 +10,22 @@ public struct Place: Hashable, Sendable {
     public var types: [String]
     /// "MG Road, Mandya": short enough for a list row.
     public var address: String?
+    /// Google's place id; only requested by the famous-places search.
+    public var id: String?
+    /// Average review score (1–5) and number of reviews; only requested by the famous-places search.
+    public var rating: Double?
+    public var ratingCount: Int?
 
-    public init(name: String, coordinate: Coordinate, primaryType: String? = nil, types: [String] = [], address: String? = nil) {
+    public init(name: String, coordinate: Coordinate, primaryType: String? = nil, types: [String] = [], address: String? = nil,
+                id: String? = nil, rating: Double? = nil, ratingCount: Int? = nil) {
         self.name = name
         self.coordinate = coordinate
         self.primaryType = primaryType
         self.types = types
         self.address = address
+        self.id = id
+        self.rating = rating
+        self.ratingCount = ratingCount
     }
 
     /// The `SpotCategory` raw value this place belongs in ("fuel", "food", …, "other").
@@ -33,6 +42,8 @@ public enum GooglePlaces {
     public static let nearbyURL = URL(string: "https://places.googleapis.com/v1/places:searchNearby")!
     public static let textURL = URL(string: "https://places.googleapis.com/v1/places:searchText")!
     static let fieldMask = "places.displayName,places.location,places.primaryType,places.types,places.shortFormattedAddress"
+    /// Ratings move a call into a pricier SKU, so only the famous-places search asks for them.
+    static let famousFieldMask = fieldMask + ",places.id,places.rating,places.userRatingCount"
 
     /// Places riders stop at. Nearby search without this names spots after banks, clinics and
     /// housing societies. All are Google "Table A" types (others make the request fail).
@@ -44,6 +55,14 @@ public enum GooglePlaces {
         "historical_landmark", "historical_place", "monument", "museum", "cultural_landmark",
         "tourist_attraction", "observation_deck", "national_park", "state_park", "park", "hiking_area", "beach",
         "car_repair",
+    ]
+
+    /// Sights worth a detour: the landmark, nature and worship types from `riderTypes` (no fuel,
+    /// food or stays), for "famous places ahead" while riding.
+    public static let famousTypes = [
+        "tourist_attraction", "historical_landmark", "historical_place", "monument", "museum", "cultural_landmark",
+        "observation_deck", "national_park", "state_park", "hiking_area", "beach", "park",
+        "hindu_temple", "buddhist_temple", "church", "mosque",
     ]
 
     /// Places of `types` within `radius` meters of `center`, nearest first (suggested names).
@@ -59,6 +78,21 @@ public enum GooglePlaces {
         ]
         if !types.isEmpty { body["includedTypes"] = types }
         return request(nearbyURL, body: body, apiKey: apiKey, bundleID: bundleID)
+    }
+
+    /// The most popular sights within `radius` meters of `center`, with their ratings
+    /// (famous places ahead while riding).
+    public static func famousRequest(
+        around center: Coordinate, radius: Double, apiKey: String, bundleID: String, languageCode: String = "en"
+    ) -> URLRequest {
+        let body: [String: Any] = [
+            "maxResultCount": 20,
+            "rankPreference": "POPULARITY",
+            "languageCode": languageCode,
+            "includedTypes": famousTypes,
+            "locationRestriction": ["circle": ["center": point(center), "radius": max(1, min(50_000, radius))]],
+        ]
+        return request(nearbyURL, body: body, apiKey: apiKey, bundleID: bundleID, fieldMask: famousFieldMask)
     }
 
     /// Places matching `query`, preferring ones near `near` ("Where to?", adding a wishlist spot).
@@ -82,7 +116,8 @@ public enum GooglePlaces {
         ["latitude": c.latitude, "longitude": c.longitude]
     }
 
-    private static func request(_ url: URL, body: [String: Any], apiKey: String, bundleID: String) -> URLRequest {
+    private static func request(_ url: URL, body: [String: Any], apiKey: String, bundleID: String,
+                                fieldMask: String = fieldMask) -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15
@@ -105,6 +140,9 @@ public enum GooglePlaces {
             var primaryType: String?
             var types: [String]?
             var shortFormattedAddress: String?
+            var id: String?
+            var rating: Double?
+            var userRatingCount: Int?
         }
         var places: [Item]?
     }
@@ -124,7 +162,8 @@ public enum GooglePlaces {
             let coordinate = Coordinate(latitude: lat, longitude: lon)
             guard coordinate.isValid else { return nil }
             return Place(name: name, coordinate: coordinate, primaryType: item.primaryType,
-                         types: item.types ?? [], address: item.shortFormattedAddress)
+                         types: item.types ?? [], address: item.shortFormattedAddress,
+                         id: item.id, rating: item.rating, ratingCount: item.userRatingCount)
         }
     }
 

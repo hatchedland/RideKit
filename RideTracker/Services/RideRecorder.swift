@@ -79,6 +79,13 @@ final class RideRecorder {
     private var alertedWishlist: Set<UUID> = []
     private var wishlist: [(reference: SpotReference, name: String)] = []
     private var lastNearbyCheck: Date = .distantPast
+    /// Famous places ahead: sights fetched along the way (by key), those already announced, and
+    /// where the last search was made.
+    private var famousPool: [String: Place] = [:]
+    private var announcedFamous: Set<String> = []
+    private var lastFamousSearch: Coordinate?
+    private var lastFamousCheck: Date = .distantPast
+    private var famousTask: Task<Void, Never>?
     private var sweepTask: Task<Void, Never>?
     private var recoveredPoints: [TrackPoint] = []
 
@@ -183,6 +190,7 @@ final class RideRecorder {
             updateDestination(from: point)
             liveActivity.update(activityState())
             checkNearbyWishlist(from: point)
+            checkFamousPlaces(from: point)
             publishLive()
         }
     }
@@ -309,6 +317,39 @@ final class RideRecorder {
         let distance = Format.distance(nearest.distance)
         banner = Banner(text: "\(name) is \(distance) away", systemImage: "star.fill")
         liveActivity.alert(title: "Wishlist spot nearby", body: "\(name) is \(distance) away", state: activityState())
+    }
+
+    /// Passive "famous places ahead": searches Google about every 3 km, then every 15 s announces
+    /// the nearest unannounced sights within 2 km that aren't behind the rider (max 3).
+    private func checkFamousPlaces(from point: TrackPoint) {
+        guard AppSettings.famousPlaceAlerts,
+              point.timestamp.timeIntervalSince(lastFamousCheck) >= 15 else { return }
+        lastFamousCheck = point.timestamp
+        let position = point.coordinate
+
+        if famousTask == nil, FamousPlaces.needsSearch(at: position, lastSearch: lastFamousSearch) {
+            lastFamousSearch = position
+            famousTask = Task { [weak self] in
+                guard let self else { return }
+                let found = await routes.famous(near: position, radius: FamousPlaces.searchRadius)
+                famousTask = nil
+                guard isRiding else { return }
+                for place in found where FamousPlaces.isFamous(place) {
+                    famousPool[FamousPlaces.key(for: place)] = place
+                }
+            }
+        }
+
+        let ahead = FamousPlaces.ahead(of: position, course: FamousPlaces.heading(of: track),
+                                       candidates: Array(famousPool.values),
+                                       alreadyAnnounced: announcedFamous,
+                                       savedSpots: wishlist.map(\.reference.coordinate))
+        guard let nearest = ahead.first else { return }
+        ahead.forEach { announcedFamous.insert(FamousPlaces.key(for: $0.place)) }
+        banner = Banner(text: "\(nearest.place.name) is \(Format.distance(nearest.distance)) ahead", systemImage: "binoculars.fill")
+        liveActivity.alert(title: "Famous places ahead",
+                           body: FamousPlaces.summary(ahead, distance: { Format.distance($0) }) + " · Google Maps",
+                           state: activityState())
     }
 
     private func loadWishlist() {
@@ -568,6 +609,12 @@ final class RideRecorder {
         songsThisRide = 0
         alertedWishlist = []
         lastNearbyCheck = .distantPast
+        famousTask?.cancel()
+        famousTask = nil
+        famousPool = [:]
+        announcedFamous = []
+        lastFamousSearch = nil
+        lastFamousCheck = .distantPast
         banner = nil
         remainingMeters = nil
         hasArrived = false
