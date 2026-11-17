@@ -81,15 +81,7 @@ struct RoutePreviewSheet: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Finding the route")
         } else if let route {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(Format.distance(route.distanceMeters)).font(Brand.stat)
-                    Text(Format.roadTime(route.durationSeconds)).font(Brand.stat).foregroundStyle(.secondary)
-                }
-                Text("By road from where you are. The ride shows the way and what's left.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
+            ArrivalEstimateView(destination: destination, route: route)
         } else if let here {
             VStack(alignment: .leading, spacing: 4) {
                 Text(Format.distance(destination.remainingDistance(from: here))).font(Brand.stat)

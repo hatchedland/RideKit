@@ -260,6 +260,12 @@ private struct SpotsToName: View {
 
 /// Step 2: optionally say where you're going, then Start. The big button always works: without a
 /// destination it starts a plain ride ("Ride · 16 Nov 2026"); with one, "Ride to Zostel Ooty".
+/// Re-fetch the route only when the destination or the starting point changes.
+private struct RouteKey: Equatable {
+    var destination: Coordinate?
+    var here: Coordinate?
+}
+
 private struct StartRideSheet: View {
     @Environment(RideRecorder.self) private var recorder
     @Environment(\.dismiss) private var dismiss
@@ -280,6 +286,8 @@ private struct StartRideSheet: View {
     @State private var shareLive = false
     @AppStorage(AppSettings.Key.openDirectionsOnStart) private var openDirections = false
     @State private var error: String?
+    /// The road to the picked destination, for the arrival estimate.
+    @State private var route: RideRoute?
 
     var body: some View {
         NavigationStack {
@@ -333,6 +341,11 @@ private struct StartRideSheet: View {
             }
             .task { here = await CurrentLocation.once() }
             .task(id: query) { await search() }
+            .task(id: RouteKey(destination: destination?.coordinate, here: here)) {
+                route = nil
+                guard let destination, let here else { return }
+                route = await GooglePlacesClient.app.route(from: here, to: destination.coordinate)
+            }
             .onAppear { if let initialDestination, destination == nil { choose(initialDestination) } }
         }
     }
@@ -364,6 +377,9 @@ private struct StartRideSheet: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .buttonStyle(.borderless)
+                }
+                if let route {
+                    ArrivalEstimateView(destination: destination, route: route, prominent: false)
                 }
                 Toggle("Directions in Google Maps", systemImage: "arrow.triangle.turn.up.right.diamond", isOn: $openDirections)
             }
