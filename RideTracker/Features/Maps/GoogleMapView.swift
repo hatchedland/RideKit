@@ -306,7 +306,11 @@ private struct GoogleMapCanvas: UIViewRepresentable {
             case .follow(let coordinate, let bearing):
                 guard Date.now.timeIntervalSince(lastFollowGesture) > followPause else { return }
                 guard let target = coordinate?.clCoordinate ?? view.myLocation?.coordinate else { return }
-                let zoom = hasPlacedCamera ? view.camera.zoom : 16
+                // Placing the camera before the map has a size leaves it at world zoom for good.
+                guard view.bounds.width > 0, view.bounds.height > 0 else { return }
+                // Continent scale is never what a rider wants while being followed (it happens if the
+                // first placement was made mid-layout); come back to street level.
+                let zoom = hasPlacedCamera && view.camera.zoom >= 10 ? view.camera.zoom : 16
                 let position = GMSCameraPosition(target: target, zoom: zoom, bearing: bearing ?? view.camera.bearing, viewingAngle: 0)
                 if hasPlacedCamera { view.animate(to: position) } else { view.camera = position }
                 hasPlacedCamera = true

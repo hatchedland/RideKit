@@ -24,6 +24,13 @@ struct GooglePlacesClient: Sendable {
                                                      apiKey: apiKey, bundleID: bundleID, languageCode: languageCode))
     }
 
+    /// The most popular sights within `radius` meters, with ratings (famous places ahead).
+    func famous(near coordinate: Coordinate, radius: Double) async -> [Place] {
+        guard let apiKey else { return [] }
+        return await send(GooglePlaces.famousRequest(around: coordinate, radius: radius,
+                                                     apiKey: apiKey, bundleID: bundleID, languageCode: languageCode))
+    }
+
     /// Places matching `query`, preferring ones near `near`.
     func search(_ query: String, near: Coordinate?) async -> [Place] {
         guard let apiKey else { return [] }
