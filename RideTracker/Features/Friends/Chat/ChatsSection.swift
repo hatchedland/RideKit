@@ -56,7 +56,7 @@ struct ChatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Brand.asphalt)
+                Circle().fill(Brand.avatar)
                 Text(initials).font(.subheadline.weight(.bold)).foregroundStyle(Brand.chalk)
             }
             .frame(width: 44, height: 44)
