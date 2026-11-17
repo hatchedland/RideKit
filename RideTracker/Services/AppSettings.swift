@@ -90,6 +90,13 @@ enum Format {
         return value < 100 ? String(format: "%.1f %@", value, unit) : String(format: "%.0f %@", value, unit)
     }
 
+    /// Like `distance`, but 1,000 km and more as "14.1k km", so it fits a narrow readout.
+    static func shortDistance(_ meters: Double, usesMetric: Bool = AppSettings.usesMetric) -> String {
+        let value = usesMetric ? meters / 1_000 : meters / 1_609.344
+        guard value >= 1_000 else { return distance(meters, usesMetric: usesMetric) }
+        return String(format: "%.1fk %@", value / 1_000, usesMetric ? "km" : "mi")
+    }
+
     /// Distance split for signboard layouts: ("131", "KM"), ("34.8", "KM"), ("0.1", "KM").
     static func distanceParts(_ meters: Double, usesMetric: Bool = AppSettings.usesMetric) -> (value: String, unit: String) {
         let value = usesMetric ? meters / 1_000 : meters / 1_609.344

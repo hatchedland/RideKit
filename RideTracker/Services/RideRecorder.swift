@@ -17,6 +17,8 @@ final class RideRecorder {
         let id = UUID()
         var text: String
         var systemImage: String
+        /// A quieter second line, e.g. the other famous places in the same alert.
+        var detail: String? = nil
     }
 
     private(set) var phase: Phase = .idle
@@ -346,7 +348,9 @@ final class RideRecorder {
                                        savedSpots: wishlist.map(\.reference.coordinate))
         guard let nearest = ahead.first else { return }
         ahead.forEach { announcedFamous.insert(FamousPlaces.key(for: $0.place)) }
-        banner = Banner(text: "\(nearest.place.name) is \(Format.distance(nearest.distance)) ahead", systemImage: "binoculars.fill")
+        let others = Array(ahead.dropFirst())
+        banner = Banner(text: "\(nearest.place.name) is \(Format.distance(nearest.distance)) ahead", systemImage: "binoculars.fill",
+                        detail: others.isEmpty ? nil : FamousPlaces.summary(others, distance: { Format.distance($0) }))
         liveActivity.alert(title: "Famous places ahead",
                            body: FamousPlaces.summary(ahead, distance: { Format.distance($0) }) + " · Google Maps",
                            state: activityState())
