@@ -95,6 +95,20 @@ Setup and release checklist: [README.md](README.md).
   2048 px JPEG copies of the chosen photos only. Nothing social on the riding screen beyond a passive
   "Live" chip; no comments or likes. Every friend's stop has **Add to my wishlist** — that's the point
   of the feature. Works in every build.
+- **Group chat (decided 2026-11-17)**: Friends › Chats, for planning rides and talking afterwards.
+  A rider makes a group from **their own friends only** (max 20, `create_chat_group` /
+  `add_chat_members`); members who aren't friends with each other see only name and @handle, never
+  rides. Unfriending doesn't remove anyone from a group; admins remove, anyone leaves. Text only for
+  now (spot and ride cards next, push last — Personal builds can't get push). **Nothing on the riding
+  screen**, ever. Every message can be **reported** (`chat_reports`, reviewed by the owner) and any
+  rider **blocked** (`rider_blocks`: their messages are hidden and they can't add you) — App Store
+  guideline 1.2. Message ids are made on the phone (no double posts); the newest 200 per group and
+  unsent messages are cached in Caches/chat as JSON (`ChatTimeline`), not SwiftData. New messages
+  arrive on the private Realtime broadcast channel `group:<id>`, used only as a nudge to re-read.
+  Riders **agree to the chat rules** once (`ChatRulesSheet`, `profiles.chat_rules_accepted_at`)
+  before posting or making a group; the server refuses both without it. The rules promise reports
+  are looked at within 24 hours, so someone must actually watch `chat_reports`. Groups keep an admin
+  and empty groups are deleted however members leave, account deletion included (`tidy_chat_group`).
 
 ## Tech constraints
 
@@ -147,10 +161,10 @@ Setup and release checklist: [README.md](README.md).
 
 | Path | Purpose |
 |---|---|
-| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
+| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), group chat (`ChatTimeline`, `ChatLayout`, `ChatText`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
 | `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
-| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `AppSettings` |
-| `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
+| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `ChatService` + `ChatBackend` (group chat), `AppSettings` |
+| `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones, `Chat/` group chat), `Common/Skeleton` (loading placeholders), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |
 | `design` | Art drawn in code: `make-icon-3d.swift` (app icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |

@@ -88,6 +88,7 @@ final class RideRecorder {
     let organizer: MediaOrganizer
     let trailNamer: TrailNamer
     let friends = FriendsService()
+    let chat = ChatService()
     private let location = LocationService()
     private let music = MusicService()
     private var songLog = SongLog()
