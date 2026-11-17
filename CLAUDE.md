@@ -11,8 +11,9 @@ Setup and release checklist: [README.md](README.md).
   `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. **Directions stay in the app
   (decided 2026-11-17)**: a spot's Directions button opens `RoutePreviewSheet` — the Google Routes
   two-wheeler route on the map, distance and time, and one **Start ride** that rides there (the riding
-  screen shows the road ahead and what's left). No turn-by-turn voice. The Start sheet's optional
-  "Directions in Google Maps" toggle is the only hand-off to the Google Maps app.
+  screen shows the road ahead and what's left). No turn-by-turn voice. **The app never hands
+  off to the Google Maps app (2026-11-17)** — the Start sheet's "Directions in Google Maps" toggle is
+  gone.
 - **Honest arrival time (decided 2026-11-17)**: wherever a route to a destination is shown before a
   ride (route preview, Start sheet), say how long it really takes and whether it ends in daylight
   (`RideTimePlan`, `ArrivalEstimateView`). Google's road time is the floor; the rider's own pace from
