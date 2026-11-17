@@ -105,6 +105,10 @@ Setup and release checklist: [README.md](README.md).
   guideline 1.2. Message ids are made on the phone (no double posts); the newest 200 per group and
   unsent messages are cached in Caches/chat as JSON (`ChatTimeline`), not SwiftData. New messages
   arrive on the private Realtime broadcast channel `group:<id>`, used only as a nudge to re-read.
+  Riders **agree to the chat rules** once (`ChatRulesSheet`, `profiles.chat_rules_accepted_at`)
+  before posting or making a group; the server refuses both without it. The rules promise reports
+  are looked at within 24 hours, so someone must actually watch `chat_reports`. Groups keep an admin
+  and empty groups are deleted however members leave, account deletion included (`tidy_chat_group`).
 
 ## Tech constraints
 
