@@ -7,13 +7,21 @@ struct FriendsView: View {
     @Environment(RideRecorder.self) private var recorder
     @State private var confirmingLeave: FriendSnapshot?
     @State private var showingFind = false
+    @State private var creatingChat = false
+    @State private var path = NavigationPath()
 
     private var friends: FriendsService { recorder.friends }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             content
                 .navigationTitle("Friends")
+                .navigationDestination(for: ChatRoute.self) { route in
+                    ChatView(groupID: route.groupID)
+                }
+                .sheet(isPresented: $creatingChat) {
+                    NewChatView { id in path.append(ChatRoute(groupID: id)) }
+                }
                 .navigationDestination(for: FriendRideRoute.self) { route in
                     if let item = friends.feed.first(where: { $0.ride.id == route.rideID }) {
                         FriendRideDetailView(friend: item.friend, item: item.ride)
@@ -48,12 +56,17 @@ struct FriendsView: View {
                     Text("Neither of you will see the other's rides any more. You can send a new request any time.")
                 }
         }
-        .task { await friends.refresh() }
+        .task {
+            await friends.refresh()
+            await recorder.chat.refresh()
+        }
         .task(id: friends.availability) {
-            // Keep live dots fresh while the tab is open; live positions change about once a minute.
+            // Keep live dots and the Chats list fresh while the tab is open; live positions change
+            // about once a minute. An open chat updates live on its own.
             while !Task.isCancelled, friends.availability == .available {
                 try? await Task.sleep(for: .seconds(30))
                 await friends.refresh()
+                await recorder.chat.refresh()
             }
         }
     }
@@ -69,7 +82,7 @@ struct FriendsView: View {
             if friends.lastRefresh == nil && friends.lastError == nil {
                 // First load: show the shape of the feed instead of a bare spinner or a false "no friends".
                 FriendsSkeletonList()
-            } else if friends.friends.isEmpty && friends.requests.isEmpty {
+            } else if friends.friends.isEmpty && friends.requests.isEmpty && recorder.chat.groups.isEmpty {
                 emptyState
             } else {
                 list
@@ -110,6 +123,8 @@ struct FriendsView: View {
                     }
                 }
             }
+
+            ChatsSection(creating: $creatingChat)
 
             if !friends.requests.isEmpty {
                 Section("Requests") {
@@ -166,7 +181,10 @@ struct FriendsView: View {
                 Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Brand.signal) }
             }
         }
-        .refreshable { await friends.refresh() }
+        .refreshable {
+            await friends.refresh()
+            await recorder.chat.refresh()
+        }
     }
 }
 
