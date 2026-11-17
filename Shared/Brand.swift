@@ -23,6 +23,26 @@ enum Brand {
     /// A card on the journal page.
     static let card = Color(light: 0xFFFFFF, dark: 0x22201C)
 
+    // MARK: Sky — only behind weather alerts and forecasts, always with chalk text on top.
+
+    enum Sky {
+        /// Rain: slate blue.
+        static let rain = [Color(hex: 0x2C3E57), Color(hex: 0x1C2738)]
+        /// Storm: bruised indigo, darker than rain.
+        static let storm = [Color(hex: 0x2A2340), Color(hex: 0x141120)]
+        /// Wind: cool grey-teal.
+        static let wind = [Color(hex: 0x2F4646), Color(hex: 0x1C2A2A)]
+        /// Heat: burnt orange into asphalt.
+        static let heat = [Color(hex: 0x8A3B12), Color(hex: 0x3A1E10)]
+        /// Clearing after rain: slate lifting to a pale sky.
+        static let clearing = [Color(hex: 0x3D5A73), Color(hex: 0x24384A)]
+        /// Sunset: orange into violet.
+        static let sunset = [Color(hex: 0xB4532A), Color(hex: 0x4A2D5C)]
+        /// Rain drops and wind streaks.
+        static let drop = Color(hex: 0xC9DCF2)
+        static let sun = Color(hex: 0xFFD27A)
+    }
+
     // MARK: Type — signboard-wide numbers, system text for everything else.
 
     /// Big glanceable readouts (speed). Wide like a highway sign, tabular so digits don't jump.

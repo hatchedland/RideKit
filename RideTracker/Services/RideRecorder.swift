@@ -19,6 +19,8 @@ final class RideRecorder {
         var systemImage: String
         /// A quieter second line, e.g. the other famous places in the same alert.
         var detail: String? = nil
+        /// Weather alerts get their sky behind them (`WeatherBackdrop`).
+        var weather: WeatherAlert.Kind? = nil
     }
 
     private(set) var phase: Phase = .idle
@@ -51,7 +53,20 @@ final class RideRecorder {
     private let routeRetryInterval: TimeInterval = 120
     private(set) var locationDenied = false
     private(set) var gpsUnavailable = false
-    var banner: Banner?
+    /// Alerts on the riding screen, newest first, stacked like notifications (at most
+    /// `maxBanners`); each one removes itself after its time.
+    var banners: [Banner] = []
+    static let maxBanners = 2
+
+    /// Shows an alert on top of the stack; the oldest drops off when it's full.
+    private func post(_ banner: Banner) {
+        banners.insert(banner, at: 0)
+        if banners.count > Self.maxBanners { banners.removeLast(banners.count - Self.maxBanners) }
+    }
+
+    func dismissBanner(_ id: Banner.ID) {
+        banners.removeAll { $0.id == id }
+    }
 
     /// Set after a ride ends; the UI shows its summary.
     var finishedRideID: UUID?
@@ -88,6 +103,18 @@ final class RideRecorder {
     private var lastFamousSearch: Coordinate?
     private var lastFamousCheck: Date = .distantPast
     private var famousTask: Task<Void, Never>?
+    /// Weather: the latest forecast for the road ahead, what's been announced, and today's sunset.
+    private var forecast: [WeatherHour] = []
+    private var weatherState = WeatherAlertState()
+    private var lastWeatherFetch: Date = .distantPast
+    private var lastWeatherFetchPosition: Coordinate?
+    private var lastWeatherCheck: Date = .distantPast
+    private var weatherTask: Task<Void, Never>?
+    private var sunset: Date?
+    /// The forecast hour covering now, for the weather beside the speed and behind the numbers.
+    private(set) var weatherNow: WeatherHour?
+    /// The latest weather alert, shown as a line in the numbers band (not stacked on the map).
+    var weatherAlert: Banner?
     private var sweepTask: Task<Void, Never>?
     private var recoveredPoints: [TrackPoint] = []
 
@@ -193,6 +220,7 @@ final class RideRecorder {
             liveActivity.update(activityState())
             checkNearbyWishlist(from: point)
             checkFamousPlaces(from: point)
+            checkWeather(from: point)
             publishLive()
         }
     }
@@ -237,7 +265,7 @@ final class RideRecorder {
         active = ride
         try? buffer.updateMetadata(ride)
         spotsMarkedThisRide += 1
-        banner = Banner(text: message, systemImage: "mappin.and.ellipse")
+        post(Banner(text: message, systemImage: "mappin.and.ellipse"))
 
         var state = activityState()
         state.lastSpotName = "📍 \(message)"
@@ -266,7 +294,7 @@ final class RideRecorder {
         followRoute(from: point.coordinate, to: destination)
         guard !hasArrived, destination.isReached(at: point.coordinate) else { return }
         hasArrived = true
-        banner = Banner(text: "Arrived at \(destination.name)", systemImage: "flag.checkered")
+        post(Banner(text: "Arrived at \(destination.name)", systemImage: "flag.checkered"))
         // The wishlist alert for the same place would only repeat this.
         if let spotID = destination.spotID { alertedWishlist.insert(spotID) }
         liveActivity.alert(title: "You've arrived", body: destination.name, state: activityState())
@@ -317,7 +345,7 @@ final class RideRecorder {
               let name = wishlist.first(where: { $0.reference.id == nearest.spot.id })?.name else { return }
         alerts.forEach { alertedWishlist.insert($0.spot.id) }
         let distance = Format.distance(nearest.distance)
-        banner = Banner(text: "\(name) is \(distance) away", systemImage: "star.fill")
+        post(Banner(text: "\(name) is \(distance) away", systemImage: "star.fill"))
         liveActivity.alert(title: "Wishlist spot nearby", body: "\(name) is \(distance) away", state: activityState())
     }
 
@@ -349,11 +377,67 @@ final class RideRecorder {
         guard let nearest = ahead.first else { return }
         ahead.forEach { announcedFamous.insert(FamousPlaces.key(for: $0.place)) }
         let others = Array(ahead.dropFirst())
-        banner = Banner(text: "\(nearest.place.name) is \(Format.distance(nearest.distance)) ahead", systemImage: "binoculars.fill",
-                        detail: others.isEmpty ? nil : FamousPlaces.summary(others, distance: { Format.distance($0) }))
+        post(Banner(text: "\(nearest.place.name) is \(Format.distance(nearest.distance)) ahead", systemImage: "binoculars.fill",
+                        detail: others.isEmpty ? nil : FamousPlaces.summary(others, distance: { Format.distance($0) })))
         liveActivity.alert(title: "Famous places ahead",
                            body: FamousPlaces.summary(ahead, distance: { Format.distance($0) }) + " · Google Maps",
                            state: activityState())
+    }
+
+    /// Weather on the road ahead: a fresh forecast every 10 min (or 10 km), checked every 30 s so an
+    /// alert lands as the hour turns. `WeatherAlerts` decides what's news; the rest stays quiet.
+    private func checkWeather(from point: TrackPoint) {
+        guard AppSettings.weatherAlerts,
+              point.timestamp.timeIntervalSince(lastWeatherCheck) >= 30 else { return }
+        lastWeatherCheck = point.timestamp
+        if sunset == nil {
+            sunset = Sun.sunset(near: point.timestamp, at: point.coordinate)
+            #if DEBUG
+            if UserDefaults.standard.string(forKey: "fakeWeather") == "sunset" { sunset = point.timestamp.addingTimeInterval(20 * 60) }
+            #endif
+        }
+
+        let moved = lastWeatherFetchPosition.map { $0.distance(to: point.coordinate) } ?? .infinity
+        if weatherTask == nil, point.timestamp.timeIntervalSince(lastWeatherFetch) >= 600 || moved >= 10_000 {
+            lastWeatherFetch = point.timestamp
+            lastWeatherFetchPosition = point.coordinate
+            let target = WeatherAlerts.forecastPoint(from: point.coordinate, routeAhead: routeAhead,
+                                                     speedMps: stats.currentSpeedMps)
+            weatherTask = Task { [weak self] in
+                guard let self else { return }
+                let fresh = await routes.forecastHours(at: target)
+                weatherTask = nil
+                guard isRiding else { return }
+                if !fresh.isEmpty { forecast = fresh }
+                weatherNow = WeatherAlerts.current(forecast, now: .now)
+                announceWeather(now: .now)
+            }
+        }
+        weatherNow = WeatherAlerts.current(forecast, now: point.timestamp)
+        announceWeather(now: point.timestamp)
+    }
+
+    private func announceWeather(now: Date) {
+        let alert = WeatherAlerts.next(forecast: forecast, now: now, state: &weatherState)
+            ?? WeatherAlerts.sunset(sunset, now: now, remainingMeters: hasArrived ? nil : remainingMeters, state: &weatherState)
+        guard let alert else { return }
+        let time: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
+        let distance: (Double) -> String = { Format.distance($0) }
+        weatherAlert = Banner(text: alert.headline(time: time), systemImage: Self.weatherSymbol(alert.kind),
+                              detail: alert.detail(distance: distance), weather: alert.kind)
+        liveActivity.alert(title: "Weather", body: alert.text(time: time, distance: distance) + " · Google",
+                           state: activityState())
+    }
+
+    private static func weatherSymbol(_ kind: WeatherAlert.Kind) -> String {
+        switch kind {
+        case .storm: "cloud.bolt.rain.fill"
+        case .rain: "cloud.rain.fill"
+        case .wind: "wind"
+        case .heat: "thermometer.sun.fill"
+        case .clearing: "cloud.sun.fill"
+        case .sunset: "sunset.fill"
+        }
     }
 
     private func loadWishlist() {
@@ -619,7 +703,17 @@ final class RideRecorder {
         announcedFamous = []
         lastFamousSearch = nil
         lastFamousCheck = .distantPast
-        banner = nil
+        weatherTask?.cancel()
+        weatherTask = nil
+        forecast = []
+        weatherNow = nil
+        weatherAlert = nil
+        weatherState = WeatherAlertState()
+        lastWeatherFetch = .distantPast
+        lastWeatherFetchPosition = nil
+        lastWeatherCheck = .distantPast
+        sunset = nil
+        banners = []
         remainingMeters = nil
         hasArrived = false
         routeTask?.cancel()
