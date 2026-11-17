@@ -9,6 +9,9 @@ struct SettingsView: View {
     @Environment(AccountService.self) private var account
     @Environment(SyncService.self) private var sync
     @State private var confirmingSignOut = false
+    @State private var confirmingDelete = false
+    @State private var deleting = false
+    @State private var deleteError: String?
     @State private var signingOut = false
     /// Changes that couldn't be uploaded; asks before signing out loses them.
     @State private var unsynced: Int?
@@ -77,12 +80,26 @@ struct SettingsView: View {
                         Button("Sync now") { Task { await sync.sync() } }
                             .disabled(sync.status == .syncing)
                         Button("Sign out", role: .destructive) { confirmingSignOut = true }
-                            .disabled(signingOut || recorder.phase != .idle)
+                            .disabled(signingOut || deleting || recorder.phase != .idle)
+                    }
+
+                    Section {
+                        if deleting {
+                            HStack(spacing: 8) { ProgressView(); Text("Deleting your account…") }
+                        } else {
+                            Button("Delete account", role: .destructive) { confirmingDelete = true }
+                                .disabled(signingOut || recorder.phase != .idle)
+                        }
+                        if let deleteError {
+                            Text(deleteError).font(.footnote).foregroundStyle(Brand.signal)
+                        }
+                    } footer: {
+                        Text("Deletes your account and everything in it for good. Photos and videos in your Photos library stay.")
                     }
                 }
 
                 Section("Privacy") {
-                    Text("Your rides, spots and photo links stay on your devices and in your own iCloud. Ride Tracker has no servers and no account. Rides you share with friends go to them through iCloud sharing, with private places removed.")
+                    Text("Your rides, spots, photo details and songs are kept in your Ride Tracker account so they're safe and on every phone you sign in to. Other riders can't see them. Your photos and videos stay in Photos and are never uploaded, except copies of the ones you pick to share with friends. Friends see only rides you share, with your start, end and private places removed.")
                         .font(.footnote)
                     Button("Open iPhone Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
@@ -98,6 +115,11 @@ struct SettingsView: View {
                 Button("Sign out", role: .destructive) { Task { await signOut(force: false) } }
             } message: {
                 Text("Your rides, spots and photo details stay in your account and come back when you sign in. They're removed from this phone; photos in your Photos library aren't touched.")
+            }
+            .confirmationDialog("Delete your account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete account and all my data", role: .destructive) { Task { await deleteAccount() } }
+            } message: {
+                Text("This removes your rides, spots, photo details, songs, friends and anything you shared, from your account and this phone. It can't be undone. Photos and videos in your Photos library and the Ride Tracker albums stay.")
             }
             .alert("Some changes haven't synced", isPresented: Binding(get: { unsynced != nil }, set: { if !$0 { unsynced = nil } })) {
                 Button("Stay signed in", role: .cancel) {}
@@ -133,6 +155,18 @@ struct SettingsView: View {
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
             }
         }
+    }
+
+    private func deleteAccount() async {
+        deleting = true
+        deleteError = nil
+        defer { deleting = false }
+        recorder.friends.endLive()
+        if let error = await account.deleteAccount() {
+            deleteError = error
+            return
+        }
+        sync.eraseLocalData()
     }
 
     /// Uploads what's left, then signs out and clears this phone's copy.

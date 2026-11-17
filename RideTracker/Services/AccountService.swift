@@ -143,6 +143,50 @@ final class AccountService {
         state = .signedOut
     }
 
+    /// Deletes the account for good: the rider's files in Storage (tracks, shared rides and their
+    /// photo copies), then the account itself, which removes every row of theirs on the server.
+    /// Photos in the Photos library are never touched. Returns an error message, or `nil` once
+    /// deleted; the caller then clears this phone's copy.
+    func deleteAccount() async -> String? {
+        guard let client else { return "Accounts aren't set up in this build." }
+        do {
+            let me = try await client.auth.session.user.id.uuidString.lowercased()
+            for bucket in ["tracks", "shared"] {
+                let files = try await Self.files(in: client.storage.from(bucket), under: me)
+                // The API removes up to 1,000 paths per call.
+                for start in stride(from: 0, to: files.count, by: 1000) {
+                    _ = try await client.storage.from(bucket).remove(paths: Array(files[start..<min(start + 1000, files.count)]))
+                }
+            }
+            try await client.rpc("delete_my_account").execute()
+        } catch {
+            return Self.message(for: error)
+        }
+        try? await client.auth.signOut()
+        profile = nil
+        state = .signedOut
+        return nil
+    }
+
+    /// Every file under `folder`, folders included recursively (a listed item without an id is a folder).
+    private static func files(in bucket: StorageFileApi, under folder: String) async throws -> [String] {
+        var paths: [String] = []
+        var offset = 0
+        while true {
+            let page = try await bucket.list(path: folder, options: SearchOptions(limit: 1000, offset: offset))
+            for item in page {
+                let path = "\(folder)/\(item.name)"
+                if item.id == nil {
+                    paths += try await files(in: bucket, under: path)
+                } else {
+                    paths.append(path)
+                }
+            }
+            guard page.count == 1000 else { return paths }
+            offset += 1000
+        }
+    }
+
     /// Back to the email field, e.g. to fix a typo.
     func startOver() {
         state = .signedOut
