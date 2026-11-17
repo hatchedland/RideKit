@@ -22,6 +22,9 @@ enum Brand {
     static let page = Color(light: 0xF6F3EA, dark: 0x100F0D)
     /// A card on the journal page.
     static let card = Color(light: 0xFFFFFF, dark: 0x22201C)
+    /// Initials discs (chat groups) on a card, always with chalk text: asphalt by day, a lifted warm
+    /// grey by night so they stand off the dark card (2.2:1) with readable initials (chalk 6.7:1).
+    static let avatar = Color(light: 0x1B1A17, dark: 0x5A544B)
 
     // MARK: Sky — only behind weather alerts and forecasts, always with chalk text on top.
 

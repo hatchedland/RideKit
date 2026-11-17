@@ -8,8 +8,19 @@ Setup and release checklist: [README.md](README.md).
 - **Spots are the core.** Every spot stores a Google Maps URL built with the official Maps URLs format
   (`https://www.google.com/maps/search/?api=1&query=lat,lon`); the link itself needs no API.
 - **Maps inside the app are Google Maps (decided 2026-11-12)**: Maps SDK for iOS through the shared
-  `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. Directions hand off to the Google
-  Maps app via Maps URLs. **Place search and suggested spot / stop names use Google Places (API
+  `GoogleMapView` (`RideTracker/Features/Maps`), never MapKit's `Map`. **Directions stay in the app
+  (decided 2026-11-17)**: a spot's Directions button opens `RoutePreviewSheet` — the Google Routes
+  two-wheeler route on the map, distance and time, and one **Start ride** that rides there (the riding
+  screen shows the road ahead and what's left). No turn-by-turn voice. **The app never hands
+  off to the Google Maps app (2026-11-17)** — the Start sheet's "Directions in Google Maps" toggle is
+  gone.
+- **Honest arrival time (decided 2026-11-17)**: wherever a route to a destination is shown before a
+  ride (route preview, Start sheet), say how long it really takes and whether it ends in daylight
+  (`RideTimePlan`, `ArrivalEstimateView`). Google's road time is the floor; the rider's own pace from
+  their last 20 rides of ≥ 20 km (`RidePace`: distance-weighted moving speed, median share of time
+  stopped) is averaged in, capped at 1.6× Google. Without 2 such rides: 15% stopped (about 10 min an
+  hour). Sunset at the destination, 20 min margin: "After dark. Leave by 1:20 pm to arrive in
+  daylight." No verdict for rides over 14 h. Before the ride only — nothing new on the riding screen. **Place search and suggested spot / stop names use Google Places (API
   New, decided 2026-11-16)** through RideKit `GooglePlaces` + `GooglePlacesClient` (plain URLSession,
   same key, `X-Ios-Bundle-Identifier`), nearby names limited to `GooglePlaces.riderTypes`; results
   shown off a Google map carry "Results from Google Maps". Addresses and towns stay on Apple's
@@ -95,6 +106,20 @@ Setup and release checklist: [README.md](README.md).
   2048 px JPEG copies of the chosen photos only. Nothing social on the riding screen beyond a passive
   "Live" chip; no comments or likes. Every friend's stop has **Add to my wishlist** — that's the point
   of the feature. Works in every build.
+- **Group chat (decided 2026-11-17)**: Friends › Chats, for planning rides and talking afterwards.
+  A rider makes a group from **their own friends only** (max 20, `create_chat_group` /
+  `add_chat_members`); members who aren't friends with each other see only name and @handle, never
+  rides. Unfriending doesn't remove anyone from a group; admins remove, anyone leaves. Text only for
+  now (spot and ride cards next, push last — Personal builds can't get push). **Nothing on the riding
+  screen**, ever. Every message can be **reported** (`chat_reports`, reviewed by the owner) and any
+  rider **blocked** (`rider_blocks`: their messages are hidden and they can't add you) — App Store
+  guideline 1.2. Message ids are made on the phone (no double posts); the newest 200 per group and
+  unsent messages are cached in Caches/chat as JSON (`ChatTimeline`), not SwiftData. New messages
+  arrive on the private Realtime broadcast channel `group:<id>`, used only as a nudge to re-read.
+  Riders **agree to the chat rules** once (`ChatRulesSheet`, `profiles.chat_rules_accepted_at`)
+  before posting or making a group; the server refuses both without it. The rules promise reports
+  are looked at within 24 hours, so someone must actually watch `chat_reports`. Groups keep an admin
+  and empty groups are deleted however members leave, account deletion included (`tidy_chat_group`).
 
 ## Tech constraints
 
@@ -104,6 +129,10 @@ Setup and release checklist: [README.md](README.md).
 - **Accounts (decided 2026-11-16): Supabase Auth, passwordless email link** (`AccountService`,
   `ridetracker://auth-callback`). Free projects can't customise the default email template, so the
   6-digit code waits for an own SMTP sender (before App Store). Signed out, only the sign-in screen shows.
+  **Delete account (2026-11-17, guideline 5.1.1(v))**: Settings › Delete account removes the rider's
+  Storage files (tracks, shared), then `delete_my_account()` deletes the auth user, which cascades to
+  every row of theirs; then this phone's copy is erased. Photos and Ride Tracker albums stay. Every
+  new table must reference `auth.users` with `on delete cascade`, or deletion leaves data behind.
 - Always the latest non-deprecated APIs, e.g. `CLLocationUpdate.liveUpdates` + `CLServiceSession` +
   `CLBackgroundActivitySession` (only "When In Use" permission — never ask for "Always"),
   `MKReverseGeocodingRequest` (not `CLGeocoder`), `MKMapItem.location` / `.address` (not `placemark`).
@@ -124,8 +153,11 @@ Setup and release checklist: [README.md](README.md).
   light background. Signal red is for recording, End and problems only. Big numbers use the expanded
   width (`Brand.readout` / `Brand.stat` / `Brand.label`); everything else is the system font. The
   riding screen is always dark. Weather uses the `Brand.Sky` tokens and the 3D illustrations from
-  `design/make-weather-3d.swift` (Assets.xcassets/Weather). The app icon is the 3D render from `design/make-icon-3d.swift`
-  (chosen 2026-11-16; copy `design/AppIcon-3D.png` into `AppIcon.appiconset/AppIcon.png`). The older flat
+  `design/make-weather-3d.swift` (Assets.xcassets/Weather). The app icon is the **tread-to-pin** 3D render from
+  `design/make-icon-tread.swift` (chosen 2026-11-17: a two-wheeler's tread mark curving up the road
+  to a map pin; highway yellow kept — saffron tested and rejected, too close to Strava's orange; copy
+  `design/AppIcon-Tread.png` into `AppIcon.appiconset/AppIcon.png`). The km-stone stays as the
+  in-app milestone shape; its 3D icon (`design/make-icon-3d.swift`) is retired. The older flat
   version is `design/make-icon.swift`.
 - **Our own icons, not SF Symbols, wherever the brand shows (decided 2026-11-16).** Drawn in code by
   `design/make-icons.swift` (24 pt grid, 2 pt round strokes) into `Assets.xcassets/Icons` as template
@@ -147,13 +179,13 @@ Setup and release checklist: [README.md](README.md).
 
 | Path | Purpose |
 |---|---|
-| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
+| `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, arrival time (`RidePace`, `RideTimePlan`), GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), group chat (`ChatTimeline`, `ChatLayout`, `ChatText`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
 | `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
-| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `AppSettings` |
-| `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones), Settings |
+| `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `ChatService` + `ChatBackend` (group chat), `AppSettings` |
+| `RideTracker/Features` | SwiftUI screens: Record (incl. `ReadyDashboard`, `WeatherBackdrop`), Spots, Rides (incl. `RideTrailView`, `SoundtrackSection`), Media (incl. `MediaSharing`), Friends (feed, live ride, friends' spots, share sheet, privacy zones, `Chat/` group chat), `Common/Skeleton` (loading placeholders), Settings |
 | `RideTrackerWidgets` | Live Activity + Dynamic Island |
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |
-| `design` | Art drawn in code: `make-icon-3d.swift` (app icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |
+| `design` | Art drawn in code: `make-icon-tread.swift` (app icon), `make-icon-3d.swift` (retired km-stone icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |
 | `TestRoutes` | GPX files for simulator playback |
 
 ## Commands

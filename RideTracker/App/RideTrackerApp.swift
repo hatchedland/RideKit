@@ -22,6 +22,7 @@ struct RideTrackerApp: App {
         let sync = SyncService(context: container.mainContext, account: account)
         _sync = State(initialValue: sync)
         recorder.friends.configure(account: account, sync: sync)
+        recorder.chat.configure(account: account)
     }
 
     var body: some Scene {

@@ -170,8 +170,9 @@ struct SpotDrawer: View {
     @Bindable var spot: Spot
     /// Opened from a list rather than a map: include the spot's small map.
     var showsMap = false
-    @Environment(\.openURL) private var openURL
+    @Environment(RideRecorder.self) private var recorder
     @FocusState private var nameFocused: Bool
+    @State private var showingRoute = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -183,16 +184,21 @@ struct SpotDrawer: View {
                 systemImage: spot.category.icon
             ) {
                 Button("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill") {
-                    openURL(GoogleMapsLink.directionsURL(to: spot.coordinate))
+                    showingRoute = true
                 }
                 .labelStyle(.iconOnly)
                 .font(.title2)
                 .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("Directions in Google Maps")
+                .disabled(recorder.isRiding)
+                .accessibilityLabel("Directions")
+                .accessibilityHint("Shows the route and starts a ride here")
             }
             SpotDetailView(spot: spot, inDrawer: true, drawerNameFocus: $nameFocused, showsMap: showsMap)
         }
         .animation(.snappy, value: nameFocused)
+        .sheet(isPresented: $showingRoute) {
+            RoutePreviewSheet(destination: RideDestination(name: spot.displayName, coordinate: spot.coordinate, spotID: spot.id))
+        }
     }
 }
 

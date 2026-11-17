@@ -103,6 +103,7 @@ final class SyncService {
         state = State()
         try? FileManager.default.removeItem(at: Self.stateURL)
         try? FileManager.default.removeItem(at: URL.cachesDirectory.appending(path: "friends"))
+        try? FileManager.default.removeItem(at: URL.cachesDirectory.appending(path: "chat"))
         status = .idle
     }
 

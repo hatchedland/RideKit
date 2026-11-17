@@ -506,6 +506,7 @@ it, and the cap colour already encodes road type (yellow NH, green SH, …).
   after the ride it's a journal (light, milestone markers, photos first).
 - **Status chips:** counters are quiet asphalt chips; only state that needs attention gets colour.
 - **Speed colours** on the ride map are data, not brand, and keep their ramp.
-- **Icon:** a km-stone with a yellow cap and a map pin cut into it, beside a road with a dashed yellow
-  centre line. Rendered by `design/make-icon.swift`.
+- **Icon (changed 2026-11-17):** a two-wheeler's tread mark — raised highway-yellow chevrons on a
+  dark rubber band — curving up the asphalt to a yellow map pin: ride → stop → place. Rendered in 3D
+  by `design/make-icon-tread.swift`. The km-stone stays inside the app as the milestone shape.
 - **Voice (to do):** short and warm like road signs, e.g. "Saved. Name it at the chai stop."
