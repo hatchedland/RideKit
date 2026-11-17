@@ -20,6 +20,8 @@ final class TrailNamer {
     private(set) var suggestions: [String: Suggestion] = [:]
     private let spots: SpotService
     private var inFlight: Set<String> = []
+    /// Stops waiting for a name in the current `resolve` pass, so the trail can show a placeholder.
+    private var pending: Set<String> = []
     private static let fileURL = URL.cachesDirectory.appending(path: "trail-names-google.json")  // new name: drops the old Apple Maps answers
 
     init(spots: SpotService) {
@@ -34,13 +36,22 @@ final class TrailNamer {
         suggestions[Self.key(coordinate)]
     }
 
+    /// True while a name for `coordinate` is still being looked up.
+    func isPending(_ coordinate: Coordinate) -> Bool {
+        pending.contains(Self.key(coordinate))
+    }
+
     /// Looks up names for `coordinates` one at a time, skipping cached ones.
     func resolve(_ coordinates: [Coordinate]) async {
+        let queued = Set(coordinates.map(Self.key).filter { suggestions[$0] == nil })
+        pending.formUnion(queued)
+        defer { pending.subtract(queued) }
+
         for coordinate in coordinates {
             let key = Self.key(coordinate)
             guard suggestions[key] == nil, !inFlight.contains(key) else { continue }
             inFlight.insert(key)
-            defer { inFlight.remove(key) }
+            defer { inFlight.remove(key); pending.remove(key) }
 
             if let landmark = await spots.landmarks(near: coordinate).first {
                 suggestions[key] = Suggestion(name: landmark.name, isLandmark: true, categoryRaw: landmark.spotCategory)

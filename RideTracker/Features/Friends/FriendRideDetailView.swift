@@ -243,7 +243,13 @@ private struct FullPhoto: View {
     var body: some View {
         ZStack {
             Color.black
-            if let image { Image(uiImage: image).resizable().scaledToFit() } else { ProgressView().tint(.white) }
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else {
+                SkeletonBlock(height: 280, cornerRadius: 12, onDark: true)
+                    .padding(.horizontal)
+                    .accessibilityLabel("Loading photo")
+            }
         }
         .task(id: url) {
             image = await Task.detached(priority: .userInitiated) { [url] in UIImage(contentsOfFile: url.path()) }.value

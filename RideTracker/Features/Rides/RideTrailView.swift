@@ -103,7 +103,11 @@ struct RideTrailRows: View {
                     NavigationLink(value: spot) { stopTitle(spot.displayName, suggested: spot.nameIsSuggested, stop: stop) }
                 } else {
                     HStack(alignment: .firstTextBaseline) {
-                        stopTitle(suggestion?.name ?? "Stop", suggested: suggestion != nil, stop: stop)
+                        if suggestion == nil && stop.kind == .cluster && recorder.trailNamer.isPending(stop.coordinate) {
+                            pendingTitle(stop)
+                        } else {
+                            stopTitle(suggestion?.name ?? "Stop", suggested: suggestion != nil, stop: stop)
+                        }
                         Spacer()
                         // A bookmark, as in Google Maps' Save: no text to wrap. Once saved, the stop's
                         // milestone fills in and its title opens the spot.
@@ -123,6 +127,17 @@ struct RideTrailRows: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         // The row outlives the button, so it carries the "saved" haptic.
         .sensoryFeedback(.success, trigger: spot != nil)
+    }
+
+    /// The stop's name is still being looked up: a placeholder bar where the title goes.
+    private func pendingTitle(_ stop: Trail.Stop) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SkeletonBlock(width: 150, height: 18)
+                .padding(.vertical, 1)
+            Text(stopMeta(stop)).font(.caption).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Finding a name for this stop")
     }
 
     private func stopTitle(_ name: String, suggested: Bool, stop: Trail.Stop) -> some View {
