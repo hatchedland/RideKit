@@ -1,3 +1,4 @@
+import RideKit
 import SwiftUI
 
 /// The screen while riding: the map edge to edge, with the bike's instruments floating on it —
@@ -32,6 +33,13 @@ struct RidingView: View {
                                    .init(color: Brand.asphalt.opacity(0.88), location: 0.7),
                                    .init(color: Brand.asphalt.opacity(0), location: 1)],
                            startPoint: .top, endPoint: .bottom)
+                .overlay {
+                    // The weather now, behind the digits, fading out with the band.
+                    if let now = recorder.weatherNow {
+                        WeatherAmbience(sky: now.sky, isDaytime: now.isDaytime ?? true)
+                            .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .top, endPoint: .bottom))
+                    }
+                }
                 .frame(height: headerBottom + 72)
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
@@ -43,7 +51,12 @@ struct RidingView: View {
                 // Alerts are about the world around the rider, so they go on the map, never over
                 // the numbers.
                 statusBadges
-                if let banner = recorder.banner { bannerView(banner) }
+                // Stacked like notifications: newest on top, the older one a little smaller.
+                ForEach(Array(recorder.banners.enumerated()), id: \.element.id) { index, banner in
+                    bannerView(banner)
+                        .scaleEffect(index == 0 ? 1 : 0.94)
+                        .opacity(index == 0 ? 1 : 0.85)
+                }
             }
             .padding(.horizontal)
             .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) { topHeight = $0 }
@@ -60,7 +73,10 @@ struct RidingView: View {
         .environment(\.colorScheme, .dark)
         // Other tabs are useless at speed and easy to hit by accident.
         .toolbarVisibility(.hidden, for: .tabBar)
-        .animation(.spring, value: recorder.banner)
+        .animation(.spring, value: recorder.banners)
+        .animation(.spring, value: recorder.weatherAlert)
+        .animation(.easeInOut, value: recorder.nowPlaying?.id)
+        .animation(.easeInOut(duration: 0.6), value: recorder.weatherNow?.sky)
         .sensoryFeedback(.success, trigger: recorder.spotsMarkedThisRide)
         .sensoryFeedback(.impact(weight: .heavy), trigger: recorder.isPaused)
         .persistentSystemOverlays(.hidden)
@@ -107,7 +123,8 @@ struct RidingView: View {
         return course
     }
 
-    /// Stays long enough to catch with a glance between looks at the road.
+    /// Map alerts (famous places, wishlist, arrival): stay long enough to catch with a glance
+    /// between looks at the road. Weather alerts live in the numbers band instead.
     private func bannerView(_ banner: RideRecorder.Banner) -> some View {
         VStack(spacing: 2) {
             Label(banner.text, systemImage: banner.systemImage)
@@ -124,24 +141,30 @@ struct RidingView: View {
         .transition(.move(edge: .top).combined(with: .opacity))
         .task(id: banner.id) {
             try? await Task.sleep(for: .seconds(6))
-            recorder.banner = nil
+            recorder.dismissBanner(banner.id)
         }
     }
 
     /// Speed big on the left, the three stats stacked on the right. The ride's name isn't needed
     /// mid-ride (it's on the Lock Screen and the summary).
     private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Format.speed(recorder.isPaused ? 0 : recorder.stats.currentSpeedMps, usesMetric: usesMetric))
-                    .font(Brand.readout(80))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(Format.speedUnit(usesMetric: usesMetric))
-                    .font(Brand.label)
-                    .foregroundStyle(Brand.highwayYellow)
+            VStack(alignment: .leading, spacing: 2) {
+                // The unit sits right on the number, like a speedometer, so it can't read as a
+                // temperature.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Format.speed(recorder.isPaused ? 0 : recorder.stats.currentSpeedMps, usesMetric: usesMetric))
+                        .font(Brand.readout(80))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text(Format.speedUnit(usesMetric: usesMetric))
+                        .font(Brand.label)
+                        .foregroundStyle(Brand.highwayYellow)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                weatherNowLine
             }
             Spacer(minLength: 12)
             VStack(alignment: .trailing, spacing: 6) {
@@ -160,8 +183,71 @@ struct RidingView: View {
                 }
             }
         }
+            if let alert = recorder.weatherAlert { weatherAlertLine(alert) }
+            if let song = recorder.nowPlaying { nowPlayingLine(song) }
+        }
         .padding(.top, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    /// The weather now, on its own labelled line under the speed: the 3D illustration
+    /// (design/make-weather-3d.swift), the temperature and a word — never a bare number beside the
+    /// speed, which would read as a temperature.
+    @ViewBuilder
+    private var weatherNowLine: some View {
+        if let now = recorder.weatherNow {
+            HStack(spacing: 6) {
+                Image(now.sky.illustration(isDaytime: now.isDaytime ?? true))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 38, height: 38)
+                    .padding(.vertical, -6)
+                Text([now.temperature.map { "\(Int($0.rounded()))°" }, now.sky.word].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Brand.chalk.opacity(0.85))
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// What's playing in the Music app, read-only: nothing to tap while riding (the headset, Siri
+    /// and the Lock Screen control music). It's the song going into the ride's soundtrack.
+    private func nowPlayingLine(_ song: NowPlayingSong) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .foregroundStyle(Brand.highwayYellow)
+            Text(song.artist.isEmpty ? song.title : "\(song.title) — \(song.artist)")
+                .foregroundStyle(Brand.chalk.opacity(0.7))
+        }
+        .font(.subheadline.weight(.medium))
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Now playing: \(song.title)\(song.artist.isEmpty ? "" : " by \(song.artist)")")
+    }
+
+    /// A weather alert as a line in the band: symbol, what and when, how much. Six seconds.
+    private func weatherAlertLine(_ alert: RideRecorder.Banner) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: alert.systemImage)
+                .symbolRenderingMode(.multicolor)
+                .font(.title3)
+            Text(alert.text).font(.headline)
+            if let detail = alert.detail {
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Text("Google").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .task(id: alert.id) {
+            try? await Task.sleep(for: .seconds(6))
+            if recorder.weatherAlert?.id == alert.id { recorder.weatherAlert = nil }
+        }
     }
 
     private func stat(_ value: String, _ label: String) -> some View {
