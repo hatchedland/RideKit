@@ -102,6 +102,7 @@ struct PreRideWeatherCard: View {
             }
             Spacer()
         }
+        .shimmering()
         .accessibilityLabel("Loading the weather")
     }
 }

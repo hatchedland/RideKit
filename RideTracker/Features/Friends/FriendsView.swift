@@ -62,11 +62,14 @@ struct FriendsView: View {
     private var content: some View {
         switch friends.availability {
         case .checking:
-            ProgressView()
+            FriendsSkeletonList()
         case .signedOut:
             ContentUnavailableView("Signing in…", systemImage: "person.crop.circle")
         case .available:
-            if friends.friends.isEmpty && friends.requests.isEmpty {
+            if friends.lastRefresh == nil && friends.lastError == nil {
+                // First load: show the shape of the feed instead of a bare spinner or a false "no friends".
+                FriendsSkeletonList()
+            } else if friends.friends.isEmpty && friends.requests.isEmpty {
                 emptyState
             } else {
                 list
@@ -268,17 +271,21 @@ struct FriendRideRow: View {
 struct FilePhoto: View {
     let url: URL
     @State private var image: UIImage?
+    @State private var loading = true
 
     var body: some View {
         Color.secondary.opacity(0.15)
+            .shimmering(loading)
             .overlay {
                 if let image { Image(uiImage: image).resizable().scaledToFill() }
             }
             .clipped()
             .task(id: url) {
+                loading = true
                 image = await Task.detached(priority: .utility) { [url] in
                     UIImage(contentsOfFile: url.path())?.preparingThumbnail(of: CGSize(width: 400, height: 400))
                 }.value
+                loading = false
             }
     }
 }
