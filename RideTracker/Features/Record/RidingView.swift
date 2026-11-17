@@ -75,6 +75,7 @@ struct RidingView: View {
         .toolbarVisibility(.hidden, for: .tabBar)
         .animation(.spring, value: recorder.banners)
         .animation(.spring, value: recorder.weatherAlert)
+        .animation(.easeInOut, value: recorder.nowPlaying?.id)
         .animation(.easeInOut(duration: 0.6), value: recorder.weatherNow?.sky)
         .sensoryFeedback(.success, trigger: recorder.spotsMarkedThisRide)
         .sensoryFeedback(.impact(weight: .heavy), trigger: recorder.isPaused)
@@ -183,6 +184,7 @@ struct RidingView: View {
             }
         }
             if let alert = recorder.weatherAlert { weatherAlertLine(alert) }
+            if let song = recorder.nowPlaying { nowPlayingLine(song) }
         }
         .padding(.top, 4)
         .accessibilityElement(children: .combine)
@@ -207,6 +209,23 @@ struct RidingView: View {
             .transition(.opacity)
             .accessibilityElement(children: .combine)
         }
+    }
+
+    /// What's playing in the Music app, read-only: nothing to tap while riding (the headset, Siri
+    /// and the Lock Screen control music). It's the song going into the ride's soundtrack.
+    private func nowPlayingLine(_ song: NowPlayingSong) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .foregroundStyle(Brand.highwayYellow)
+            Text(song.artist.isEmpty ? song.title : "\(song.title) — \(song.artist)")
+                .foregroundStyle(Brand.chalk.opacity(0.7))
+        }
+        .font(.subheadline.weight(.medium))
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Now playing: \(song.title)\(song.artist.isEmpty ? "" : " by \(song.artist)")")
     }
 
     /// A weather alert as a line in the band: symbol, what and when, how much. Six seconds.

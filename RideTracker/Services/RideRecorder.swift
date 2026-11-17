@@ -33,6 +33,9 @@ final class RideRecorder {
     private(set) var spotsMarkedThisRide = 0
     /// Songs from Apple Music logged so far this ride.
     private(set) var songsThisRide = 0
+    /// The song playing in the Music app right now, for the riding screen's read-only line; `nil`
+    /// when paused, stopped, or playing in another app (iOS only lets apps read the Music app).
+    private(set) var nowPlaying: NowPlayingSong?
     /// Friends can follow this ride live (chosen on the Start sheet).
     private(set) var isSharingLive = false
     /// Straight-line meters to the destination picked at Start; `nil` without a destination or a fix.
@@ -477,6 +480,15 @@ final class RideRecorder {
             while !Task.isCancelled {
                 guard let self else { return }
                 let now = self.music.nowPlaying()
+                var playing = now.isPlaying ? now.song : nil
+                #if DEBUG
+                // The simulator has no Music app: `defaults write … fakeSong "Title|Artist"`.
+                if let fake = UserDefaults.standard.string(forKey: "fakeSong") {
+                    let parts = fake.split(separator: "|", maxSplits: 1).map(String.init)
+                    playing = NowPlayingSong(id: "fake", title: parts[0], artist: parts.count > 1 ? parts[1] : "")
+                }
+                #endif
+                if playing?.id != self.nowPlaying?.id { self.nowPlaying = playing }
                 if let play = self.songLog.observe(now.song, isPlaying: now.isPlaying, at: .now) {
                     self.save(play)
                 }
@@ -487,6 +499,7 @@ final class RideRecorder {
 
     private func stopMusicLog(at time: Date) {
         musicTask?.cancel()
+        nowPlaying = nil
         musicTask = nil
         if let play = songLog.finish(at: time) { save(play) }
     }
