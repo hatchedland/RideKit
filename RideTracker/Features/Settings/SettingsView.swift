@@ -16,6 +16,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.Key.autoPause) private var autoPause = AutoPauseDetector.Sensitivity.normal.rawValue
     @AppStorage(AppSettings.Key.includeScreenshots) private var includeScreenshots = false
     @AppStorage(AppSettings.Key.nearbyAlerts) private var nearbyAlerts = true
+    @AppStorage(AppSettings.Key.famousPlaceAlerts) private var famousPlaceAlerts = true
+    @AppStorage(AppSettings.Key.weatherAlerts) private var weatherAlerts = true
     @AppStorage(AppSettings.Key.spotRadius) private var spotRadius = MediaPlacer.defaultSpotRadius
     @AppStorage(AppSettings.Key.trackSongs) private var trackSongs = true
 
@@ -24,13 +26,19 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Riding") {
+                Section {
                     Picker("Auto-pause", selection: $autoPause) {
                         Text("Less sensitive").tag(AutoPauseDetector.Sensitivity.low.rawValue)
                         Text("Normal").tag(AutoPauseDetector.Sensitivity.normal.rawValue)
                         Text("More sensitive").tag(AutoPauseDetector.Sensitivity.high.rawValue)
                     }
                     Toggle("Alert near wishlist spots", isOn: $nearbyAlerts)
+                    Toggle("Alert about famous places ahead", isOn: $famousPlaceAlerts)
+                    Toggle("Weather alerts while riding", isOn: $weatherAlerts)
+                } header: {
+                    Text("Riding")
+                } footer: {
+                    Text("Famous places are well-reviewed sights within 2 km ahead of you, up to 3 at a time. Results from Google Maps. Weather alerts cover storms, rain, wind, heat and sunset on the road ahead. Weather from Google.")
                 }
 
                 Section {

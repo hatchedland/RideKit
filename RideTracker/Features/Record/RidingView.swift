@@ -1,48 +1,82 @@
+import RideKit
 import SwiftUI
 
-/// The screen while riding: huge glanceable numbers, a big **Mark spot** button, nothing fiddly.
+/// The screen while riding: the map edge to edge, with the bike's instruments floating on it —
+/// a compact band of numbers at the top, one row of controls at the bottom (Pause · **Mark spot** ·
+/// End), alerts sliding in under the numbers. The tab bar is hidden while riding.
 struct RidingView: View {
     @Environment(RideRecorder.self) private var recorder
     @State private var confirmingEnd = false
+    /// Heights of the floating bands, so the map keeps the rider's dot and Google logo between them.
+    @State private var topHeight: CGFloat = 200
+    /// Bottom of the numbers band, for the scrim behind it.
+    @State private var headerBottom: CGFloat = 160
+    @State private var controlsHeight: CGFloat = 120
 
     private var usesMetric: Bool { AppSettings.usesMetric }
 
     var body: some View {
         @Bindable var recorder = recorder
 
-        VStack(spacing: 0) {
-            header
-            GoogleMapView(
-                lines: lines,
-                pins: destinationPin,
-                camera: .follow(recorder.track.last?.coordinate, bearing: heading),
-                showsUserLocation: true,
-                padding: UIEdgeInsets(top: 48, left: 0, bottom: 0, right: 0)
-            )
-            .frame(maxHeight: .infinity)
-            .overlay(alignment: .top) { statusBadges.padding(.top, 8) }
-
+        GoogleMapView(
+            lines: lines,
+            pins: destinationPin,
+            camera: .follow(recorder.track.last?.coordinate, bearing: heading),
+            showsUserLocation: true,
+            padding: UIEdgeInsets(top: topHeight, left: 0, bottom: controlsHeight, right: 0)
+        )
+        .ignoresSafeArea()
+        // Near-solid asphalt behind the numbers so they read at a glance on any map tile, fading out
+        // just below the status chips.
+        .overlay(alignment: .top) {
+            LinearGradient(stops: [.init(color: Brand.asphalt.opacity(0.94), location: 0),
+                                   .init(color: Brand.asphalt.opacity(0.88), location: 0.7),
+                                   .init(color: Brand.asphalt.opacity(0), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .overlay {
+                    // The weather now, behind the digits, fading out with the band.
+                    if let now = recorder.weatherNow {
+                        WeatherAmbience(sky: now.sky, isDaytime: now.isDaytime ?? true)
+                            .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .top, endPoint: .bottom))
+                    }
+                }
+                .frame(height: headerBottom + 72)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .top) {
+            VStack(spacing: 8) {
+                header
+                    .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .local).height }) { headerBottom = $0 }
+                // Alerts are about the world around the rider, so they go on the map, never over
+                // the numbers.
+                statusBadges
+                // Stacked like notifications: newest on top, the older one a little smaller.
+                ForEach(Array(recorder.banners.enumerated()), id: \.element.id) { index, banner in
+                    bannerView(banner)
+                        .scaleEffect(index == 0 ? 1 : 0.94)
+                        .opacity(index == 0 ? 1 : 0.85)
+                }
+            }
+            .padding(.horizontal)
+            .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) { topHeight = $0 }
+        }
+        .overlay(alignment: .bottom) {
             controls
+                .background(alignment: .bottom) {
+                    fade(towards: .bottom).padding(.top, -40).ignoresSafeArea(edges: .bottom)
+                }
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { controlsHeight = $0 + 34 }
         }
         .background(Brand.asphalt)
         // The riding screen is the bike's instrument cluster: always dark, yellow on asphalt.
         .environment(\.colorScheme, .dark)
-        .overlay(alignment: .top) {
-            if let banner = recorder.banner {
-                Label(banner.text, systemImage: banner.systemImage)
-                    .font(.headline)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.thickMaterial, in: .capsule)
-                    .padding(.top, 140)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .task(id: banner.id) {
-                        try? await Task.sleep(for: .seconds(3))
-                        recorder.banner = nil
-                    }
-            }
-        }
-        .animation(.spring, value: recorder.banner)
+        // Other tabs are useless at speed and easy to hit by accident.
+        .toolbarVisibility(.hidden, for: .tabBar)
+        .animation(.spring, value: recorder.banners)
+        .animation(.spring, value: recorder.weatherAlert)
+        .animation(.easeInOut, value: recorder.nowPlaying?.id)
+        .animation(.easeInOut(duration: 0.6), value: recorder.weatherNow?.sky)
         .sensoryFeedback(.success, trigger: recorder.spotsMarkedThisRide)
         .sensoryFeedback(.impact(weight: .heavy), trigger: recorder.isPaused)
         .persistentSystemOverlays(.hidden)
@@ -51,6 +85,12 @@ struct RidingView: View {
         } message: {
             Text("The Photos album will be finished with everything you took during the ride.")
         }
+    }
+
+    /// Asphalt behind the floating bands, fading into the map so the numbers stay readable on any tile.
+    private func fade(towards edge: VerticalEdge) -> some View {
+        LinearGradient(colors: [Brand.asphalt, Brand.asphalt.opacity(0.92), Brand.asphalt.opacity(0)],
+                       startPoint: edge == .top ? .top : .bottom, endPoint: edge == .top ? .bottom : .top)
     }
 
     /// The road still ahead (Google's two-wheeler route) in chalk, under the road ridden in yellow.
@@ -83,50 +123,150 @@ struct RidingView: View {
         return course
     }
 
-    private var header: some View {
-        VStack(spacing: 4) {
-            Text(recorder.active?.name ?? "Ride")
+    /// Map alerts (famous places, wishlist, arrival): stay long enough to catch with a glance
+    /// between looks at the road. Weather alerts live in the numbers band instead.
+    private func bannerView(_ banner: RideRecorder.Banner) -> some View {
+        VStack(spacing: 2) {
+            Label(banner.text, systemImage: banner.systemImage)
                 .font(.headline)
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Format.speed(recorder.isPaused ? 0 : recorder.stats.currentSpeedMps, usesMetric: usesMetric))
-                    .font(Brand.readout(88))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                Text(Format.speedUnit(usesMetric: usesMetric))
-                    .font(Brand.label)
-                    .foregroundStyle(Brand.highwayYellow)
+            if let detail = banner.detail {
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
             }
-            HStack {
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.thickMaterial, in: .rect(cornerRadius: 22))
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .task(id: banner.id) {
+            try? await Task.sleep(for: .seconds(6))
+            recorder.dismissBanner(banner.id)
+        }
+    }
+
+    /// Speed big on the left, the three stats stacked on the right. The ride's name isn't needed
+    /// mid-ride (it's on the Lock Screen and the summary).
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                // The unit sits right on the number, like a speedometer, so it can't read as a
+                // temperature.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Format.speed(recorder.isPaused ? 0 : recorder.stats.currentSpeedMps, usesMetric: usesMetric))
+                        .font(Brand.readout(80))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text(Format.speedUnit(usesMetric: usesMetric))
+                        .font(Brand.label)
+                        .foregroundStyle(Brand.highwayYellow)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                weatherNowLine
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 6) {
                 stat(Format.distance(recorder.stats.distanceMeters, usesMetric: usesMetric), "Distance")
                 if let start = recorder.active?.startedAt {
-                    VStack(spacing: 2) {
+                    statRow(label: "Time") {
                         Text(timerInterval: start...Date.distantFuture, countsDown: false)
-                            .font(Brand.stat).monospacedDigit()
-                        Text("TIME").font(Brand.label).foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
                 }
                 // With a destination, "to go" matters more mid-ride than top speed.
                 if recorder.active?.destination != nil {
-                    stat(recorder.hasArrived ? "Here" : recorder.remainingMeters.map { Format.distance($0, usesMetric: usesMetric) } ?? "–",
+                    stat(recorder.hasArrived ? "Here" : recorder.remainingMeters.map { Format.shortDistance($0, usesMetric: usesMetric) } ?? "–",
                          toGoLabel)
                 } else {
                     stat(Format.speed(recorder.stats.maxSpeedMps, usesMetric: usesMetric), "Max")
                 }
             }
         }
-        .padding()
+            if let alert = recorder.weatherAlert { weatherAlertLine(alert) }
+            if let song = recorder.nowPlaying { nowPlayingLine(song) }
+        }
+        .padding(.top, 4)
         .accessibilityElement(children: .combine)
     }
 
-    private func stat(_ value: String, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(Brand.stat).monospacedDigit()
-            Text(label.uppercased()).font(Brand.label).foregroundStyle(.secondary)
+    /// The weather now, on its own labelled line under the speed: the 3D illustration
+    /// (design/make-weather-3d.swift), the temperature and a word — never a bare number beside the
+    /// speed, which would read as a temperature.
+    @ViewBuilder
+    private var weatherNowLine: some View {
+        if let now = recorder.weatherNow {
+            HStack(spacing: 6) {
+                Image(now.sky.illustration(isDaytime: now.isDaytime ?? true))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 38, height: 38)
+                    .padding(.vertical, -6)
+                Text([now.temperature.map { "\(Int($0.rounded()))°" }, now.sky.word].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Brand.chalk.opacity(0.85))
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    /// What's playing in the Music app, read-only: nothing to tap while riding (the headset, Siri
+    /// and the Lock Screen control music). It's the song going into the ride's soundtrack.
+    private func nowPlayingLine(_ song: NowPlayingSong) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .foregroundStyle(Brand.highwayYellow)
+            Text(song.artist.isEmpty ? song.title : "\(song.title) — \(song.artist)")
+                .foregroundStyle(Brand.chalk.opacity(0.7))
+        }
+        .font(.subheadline.weight(.medium))
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Now playing: \(song.title)\(song.artist.isEmpty ? "" : " by \(song.artist)")")
+    }
+
+    /// A weather alert as a line in the band: symbol, what and when, how much. Six seconds.
+    private func weatherAlertLine(_ alert: RideRecorder.Banner) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: alert.systemImage)
+                .symbolRenderingMode(.multicolor)
+                .font(.title3)
+            Text(alert.text).font(.headline)
+            if let detail = alert.detail {
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Text("Google").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .task(id: alert.id) {
+            try? await Task.sleep(for: .seconds(6))
+            if recorder.weatherAlert?.id == alert.id { recorder.weatherAlert = nil }
+        }
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        statRow(label: label) { Text(value) }
+    }
+
+    /// "12.4 km  DISTANCE": value and label on one line, right-aligned into a column.
+    private func statRow(label: String, @ViewBuilder value: () -> Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            value()
+                .font(Brand.stat)
+                .monospacedDigit()
+            Text(label.uppercased())
+                .font(Brand.label)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 64, alignment: .leading)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
     }
 
     private var statusBadges: some View {
@@ -170,43 +310,52 @@ struct RidingView: View {
             .foregroundStyle(foreground)
     }
 
+    /// One row: Pause and End are used about once a ride, so they're round buttons beside the big
+    /// **Mark spot**, which keeps its height and its place under the thumb. End still confirms.
     private var controls: some View {
-        VStack(spacing: 12) {
+        HStack(spacing: 12) {
+            Button {
+                recorder.togglePause()
+            } label: {
+                Image(systemName: recorder.isManuallyPaused ? "play.fill" : "pause.fill")
+                    .font(.title2.bold())
+                    .foregroundStyle(recorder.isManuallyPaused ? Brand.asphalt : Brand.highwayYellow)
+                    .frame(width: 64, height: 64)
+                    .background(recorder.isManuallyPaused ? Brand.highwayYellow : Color.white.opacity(0.14), in: .circle)
+            }
+            .accessibilityLabel(recorder.isManuallyPaused ? "Resume" : "Pause")
+
             Button {
                 recorder.markSpot()
             } label: {
-                Label("Mark spot", systemImage: "mappin.and.ellipse")
-                    .font(.title.bold().width(.expanded))
-                    .foregroundStyle(Brand.asphalt)
-                    .frame(maxWidth: .infinity, minHeight: 84)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Brand.highwayYellow)
-
-            HStack(spacing: 12) {
-                Button {
-                    recorder.togglePause()
-                } label: {
-                    Label(recorder.isManuallyPaused ? "Resume" : "Pause",
-                          systemImage: recorder.isManuallyPaused ? "play.fill" : "pause.fill")
-                        .font(.title3.bold())
-                        .frame(maxWidth: .infinity, minHeight: 56)
+                // Never truncated: drops the icon before the words get cut.
+                ViewThatFits(in: .horizontal) {
+                    Label("Mark spot", systemImage: "mappin.and.ellipse")
+                    Text("Mark spot")
                 }
-                .buttonStyle(.bordered)
-
-                Button {
-                    confirmingEnd = true
-                } label: {
-                    Label("End", systemImage: "flag.checkered")
-                        .font(.title3.bold())
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                }
-                .buttonStyle(.bordered)
-                .tint(Brand.signal)
-                .disabled(recorder.phase == .finishing)
+                .font(.title2.bold().width(.expanded))
+                .lineLimit(1)
+                .foregroundStyle(Brand.asphalt)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 84)
+                .background(Brand.highwayYellow, in: .capsule)
             }
+
+            Button {
+                confirmingEnd = true
+            } label: {
+                Image(systemName: "flag.checkered")
+                    .font(.title2.bold())
+                    .foregroundStyle(Brand.signal)
+                    .frame(width: 64, height: 64)
+                    .background(Brand.signal.opacity(0.22), in: .circle)
+            }
+            .disabled(recorder.phase == .finishing)
+            .accessibilityLabel("End ride")
         }
-        .padding()
+        .buttonStyle(PressableStyle())
+        .padding(.horizontal)
+        .padding(.bottom, 4)
         .overlay {
             if recorder.phase == .finishing {
                 ProgressView("Finishing album…")
@@ -214,5 +363,16 @@ struct RidingView: View {
                     .background(.regularMaterial, in: .rect(cornerRadius: 12))
             }
         }
+    }
+}
+
+/// Exact sizes (the system bordered styles pad their labels) with a press dip for feedback.
+private struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .contentShape(.rect)
     }
 }

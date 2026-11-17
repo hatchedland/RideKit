@@ -41,6 +41,15 @@ struct RideRouteTests {
         #expect(json["units"] as? String == "METRIC")
     }
 
+    @Test func driveIsTheFallbackMode() throws {
+        #expect(GoogleRoutes.TravelMode.allCases == [.twoWheeler, .drive])
+        let request = GoogleRoutes.request(from: origin, to: Fixtures.north(of: origin, meters: 5_000), mode: .drive,
+                                           apiKey: "K", bundleID: "b")
+        let data = try #require(request.httpBody)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["travelMode"] as? String == "DRIVE")
+    }
+
     @Test func parsesGooglesAnswer() throws {
         let encoded = Polyline.encode([origin, Fixtures.north(of: origin, meters: 1_000)])
         let json = #"{"routes":[{"distanceMeters":48758,"duration":"5418s","polyline":{"encodedPolyline":"\#(encoded)"}}]}"#
