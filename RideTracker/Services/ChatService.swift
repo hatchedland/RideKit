@@ -13,6 +13,9 @@ final class ChatService {
     private(set) var timelines: [UUID: ChatTimeline] = [:]
     private(set) var blocked: Set<UUID> = []
     private(set) var me: UUID?
+    /// Whether the rider agreed to the chat rules; `nil` until known. Posting and making groups
+    /// wait for it (the server refuses both without it).
+    private(set) var rulesAccepted: Bool?
     /// Set after the first successful load, so the list can show skeletons until then.
     private(set) var hasLoaded = false
     private(set) var isLoadingEarlier = false
@@ -47,8 +50,10 @@ final class ChatService {
             me = try await backend.me()
             async let overview = backend.overview()
             async let blocks = backend.blocked()
+            async let rules = backend.hasAcceptedRules()
             groups = try await overview
             blocked = try await blocks
+            rulesAccepted = try await rules
             hasLoaded = true
             lastError = nil
             await flushOutbox()
@@ -151,6 +156,18 @@ final class ChatService {
     }
 
     // MARK: Safety
+
+    func acceptRules() async -> Bool {
+        guard let backend else { return false }
+        do {
+            try await backend.acceptRules()
+            rulesAccepted = true
+            return true
+        } catch {
+            lastError = Self.message(for: error)
+            return false
+        }
+    }
 
     func report(_ message: ChatMessage, reason: String) async -> Bool {
         guard let backend else { return false }

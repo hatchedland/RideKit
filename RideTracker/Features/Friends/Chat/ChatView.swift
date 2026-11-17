@@ -11,6 +11,7 @@ struct ChatView: View {
     @State private var reporting: ChatMessage?
     @State private var blocking: ChatGroup.Member?
     @State private var reported = false
+    @State private var showingRules = false
     @FocusState private var composing: Bool
 
     private var chat: ChatService { recorder.chat }
@@ -55,6 +56,7 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showingInfo) { ChatInfoView(groupID: groupID) }
+        .sheet(isPresented: $showingRules) { ChatRulesSheet { composing = true } }
         .confirmationDialog("Report this message?", isPresented: isPresent($reporting), titleVisibility: .visible,
                             presenting: reporting) { message in
             ForEach(["Spam", "Abusive or harassing", "Something else"], id: \.self) { reason in
@@ -158,7 +160,25 @@ struct ChatView: View {
 
     // MARK: Composer
 
+    @ViewBuilder
     private var composer: some View {
+        if chat.rulesAccepted == false {
+            Button {
+                showingRules = true
+            } label: {
+                Text("Agree to the chat rules to send messages")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .padding(.horizontal).padding(.vertical, 8)
+            .background(.bar)
+        } else {
+            messageField
+        }
+    }
+
+    private var messageField: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField("Message", text: $draft, axis: .vertical)
                 .lineLimit(1...5)

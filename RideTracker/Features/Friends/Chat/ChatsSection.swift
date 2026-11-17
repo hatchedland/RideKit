@@ -7,6 +7,7 @@ struct ChatRoute: Hashable { var groupID: UUID }
 struct ChatsSection: View {
     @Environment(RideRecorder.self) private var recorder
     @Binding var creating: Bool
+    @State private var showingRules = false
 
     private var chat: ChatService { recorder.chat }
 
@@ -32,12 +33,17 @@ struct ChatsSection: View {
             HStack {
                 Text("Chats")
                 Spacer()
-                Button("New group", systemImage: "square.and.pencil") { creating = true }
+                Button("New group", systemImage: "square.and.pencil") {
+                    if chat.rulesAccepted == true { creating = true } else { showingRules = true }
+                }
                     .labelStyle(.titleAndIcon)
                     .font(.subheadline)
                     .textCase(nil)
                     .disabled(recorder.friends.friends.isEmpty)
             }
+        }
+        .sheet(isPresented: $showingRules) {
+            ChatRulesSheet { creating = true }
         }
     }
 }

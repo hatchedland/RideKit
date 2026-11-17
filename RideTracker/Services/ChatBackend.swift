@@ -119,6 +119,18 @@ struct ChatBackend: Sendable {
 
     // MARK: Safety
 
+    func hasAcceptedRules() async throws -> Bool {
+        struct Row: Decodable { var chat_rules_accepted_at: Date? }
+        let me = try await me()
+        let rows: [Row] = try await client.from("profiles").select("chat_rules_accepted_at").eq("id", value: me)
+            .execute().value
+        return rows.first?.chat_rules_accepted_at != nil
+    }
+
+    func acceptRules() async throws {
+        try await client.rpc("accept_chat_rules").execute()
+    }
+
     func report(_ message: UUID, reason: String) async throws {
         struct Insert: Encodable { var message_id: UUID; var reason: String }
         try await client.from("chat_reports").insert(Insert(message_id: message, reason: String(reason.prefix(500))),
