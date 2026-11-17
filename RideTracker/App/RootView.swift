@@ -48,6 +48,7 @@ struct RootView: View {
             Tab("Friends", image: "tab-friends", value: .friends) {
                 FriendsView()
             }
+            .badge(recorder.chat.unreadTotal)
             Tab("Settings", image: "tab-settings", value: .settings) {
                 SettingsView()
             }
@@ -88,6 +89,7 @@ struct RootView: View {
         }
         .task {
             await recorder.friends.start(isRidingLive: recorder.isSharingLive)
+            await recorder.chat.refresh()
         }
         .onChange(of: recorder.isRiding) { _, riding in
             if riding { selection = .ride }
