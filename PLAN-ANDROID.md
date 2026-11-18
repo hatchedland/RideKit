@@ -92,7 +92,16 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
       **`ridekit`**: the Kotlin port of everything `spec/fixtures` covers (geometry, track codec, privacy,
       stops/wishlist, pace/arrival/sunset, weather alerts, famous places, trail, naming, app version),
       times as Unix seconds. `./scripts/test-android.sh` runs it against every golden file.
-- [ ] App module (Compose, Material 3 + Milestone tokens, Room, WorkManager, supabase-kt, Maps).
+- [x] App module, slice 1 (2026-11-18): AGP 9.5.1 (built-in Kotlin), compileSdk/targetSdk 37, minSdk 29,
+      Compose BOM 2026.09.00, supabase-kt 3.9.0; Milestone theme + km-stone mark; sign-in with Google
+      (Credential Manager → ID token + nonce) and Apple (Supabase OAuth, Custom Tab →
+      `ridetracker://auth-callback`); @handle step; five-tab shell. Secrets in git-ignored
+      `android/secrets.properties`. Builds (`./scripts/build-android.sh`); not yet run on a device.
+- [ ] Slice 2: Room (rides, spots, media links, songs) + Supabase sync (WorkManager), TrackCodec files.
+- [ ] Slice 3: recording foreground service, riding screen, Mark spot (button, notification, QS tile).
+- [ ] Slice 4: Spots map + drawer, rides list/detail.
+- [ ] Brand icons as VectorDrawables (tabs use Material stand-ins), Roboto Flex for readouts, adaptive icon.
+- [ ] Google Cloud: Android OAuth client (package + SHA-1) so Credential Manager can sign in.
 Sign-in + @handle, Start ride → record (FGS) → Mark spot (button, notification, QS tile) → End,
 spots + map + drawer, rides list/detail, offline-first sync.
 

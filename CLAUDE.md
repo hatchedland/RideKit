@@ -219,6 +219,8 @@ below (`RideTracker/…`, `Shared/…`, `Packages/RideKit`, `Config/…`) are re
 ./scripts/test.sh                       # RideKit unit tests (works with only Command Line Tools)
 ./scripts/test-functions.sh             # Edge Functions' shared logic vs spec/fixtures (Node 23+)
 ./scripts/test-android.sh               # Kotlin RideKit (android/ridekit) vs spec/fixtures (JDK 21+)
+./scripts/build-android.sh              # Android debug APK; `./scripts/build-android.sh :app:installDebug` to a device
+                                        # (Android secrets: android/secrets.properties, template secrets.example.properties)
 (cd ios && xcodegen generate)           # regenerate the Xcode project after editing ios/project.yml
 xcodebuild -project ios/RideTracker.xcodeproj -scheme RideTracker -destination 'platform=iOS Simulator,name=iPhone 17' test   # needs Xcode
 ./scripts/run-on-iphone.sh              # free Personal build (no iCloud) → USB iPhone
