@@ -122,10 +122,21 @@ struct TrailTests {
     @Test func songsLandOnTheLegTheyStartedOn() {
         let trail = build(
             media: [Trail.Media(id: "stop", capturedAt: at(30), coordinate: position(30))],
-            songs: [("s2", at(45)), ("s1", at(5)), ("atStop", at(30))]
+            songs: [("s2", at(45)), ("s1", at(5))]
         )
         #expect(trail.legs[0].songIDs == ["s1"])
-        #expect(trail.legs[1].songIDs == ["atStop", "s2"])
+        #expect(trail.legs[1].songIDs == ["s2"])
+    }
+
+    @Test func songsStartedDuringAStopBelongToTheStop() {
+        let trail = build(
+            media: [Trail.Media(id: "chai-1", capturedAt: at(30), coordinate: position(30)),
+                    Trail.Media(id: "chai-2", capturedAt: at(36), coordinate: position(30))],
+            songs: [("before", at(29)), ("arriving", at(30)), ("sipping", at(33)), ("leaving", at(36)), ("after", at(37))]
+        )
+        #expect(trail.stops[0].songIDs == ["arriving", "sipping", "leaving"])
+        #expect(trail.legs[0].songIDs == ["before"])
+        #expect(trail.legs[1].songIDs == ["after"])
     }
 
     @Test func withoutTrackDistancesAreNil() {

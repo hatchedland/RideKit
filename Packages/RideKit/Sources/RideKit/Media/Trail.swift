@@ -29,6 +29,8 @@ public struct Trail: Equatable, Sendable {
         public var distanceFromStart: Double?
         /// Media IDs, oldest first.
         public var mediaIDs: [String]
+        /// Songs that started while the rider was here (IDs as passed in).
+        public var songIDs: [String] = []
     }
 
     public struct Leg: Equatable, Sendable {
@@ -38,7 +40,7 @@ public struct Trail: Equatable, Sendable {
         public var distance: Double?
         /// Photos with no location that weren't taken at a stop: "on the road".
         public var mediaIDs: [String]
-        /// Songs that started on this leg (IDs as passed in).
+        /// Songs that started on this leg and not at a stop (IDs as passed in).
         public var songIDs: [String]
 
         public var duration: TimeInterval { end.timeIntervalSince(start) }
@@ -160,7 +162,14 @@ public struct Trail: Equatable, Sendable {
             legs.lastIndex { $0.start <= date } ?? 0
         }
         for item in onTheRoad { legs[legIndex(at: item.capturedAt)].mediaIDs.append(item.id) }
-        for song in songs.sorted(by: { $0.startedAt < $1.startedAt }) { legs[legIndex(at: song.startedAt)].songIDs.append(song.id) }
+        // A song that started during a stop (arrival to departure) belongs to the stop, else to its leg.
+        for song in songs.sorted(by: { $0.startedAt < $1.startedAt }) {
+            if let index = stops.firstIndex(where: { $0.arrivedAt <= song.startedAt && song.startedAt <= $0.departedAt }) {
+                stops[index].songIDs.append(song.id)
+            } else {
+                legs[legIndex(at: song.startedAt)].songIDs.append(song.id)
+            }
+        }
 
         return Trail(stops: stops, legs: legs)
     }

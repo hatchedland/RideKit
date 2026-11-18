@@ -67,17 +67,7 @@ struct RideTrailRows: View {
                         .font(.caption.weight(.semibold).width(.expanded))
                         .foregroundStyle(.secondary)
                 }
-                ForEach(songs(leg.songIDs)) { song in
-                    Button {
-                        if let url = song.appleMusicURL { openURL(url) }
-                    } label: {
-                        Label("\(song.title)\(song.artist.isEmpty ? "" : " — \(song.artist)")", systemImage: "music.note")
-                            .font(.footnote)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityHint("Opens in Apple Music")
-                }
+                songRows(leg.songIDs)
                 if !leg.mediaIDs.isEmpty {
                     Text("On the road").font(.caption).foregroundStyle(.secondary)
                     strip(leg.mediaIDs)
@@ -86,6 +76,20 @@ struct RideTrailRows: View {
             .padding(.vertical, trivial ? 4 : 6)
         }
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+    }
+
+    private func songRows(_ ids: [String]) -> some View {
+        ForEach(songs(ids)) { song in
+            Button {
+                if let url = song.appleMusicURL { openURL(url) }
+            } label: {
+                Label("\(song.title)\(song.artist.isEmpty ? "" : " — \(song.artist)")", systemImage: "music.note")
+                    .font(.footnote)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityHint("Opens in Apple Music")
+        }
     }
 
     @ViewBuilder
@@ -121,6 +125,7 @@ struct RideTrailRows: View {
                     }
                 }
                 if !stop.mediaIDs.isEmpty { strip(stop.mediaIDs) }
+                songRows(stop.songIDs)
             }
             .padding(.vertical, 8)
         }

@@ -494,6 +494,7 @@ struct SharedFixtureTests {
             var departedAt: Double
             var distanceFromStart: Double?
             var mediaIDs: [String]
+            var songIDs: [String]
         }
         struct Leg: Codable, Equatable {
             var start: Double
@@ -512,7 +513,7 @@ struct SharedFixtureTests {
             Trail.build: stops = spots (marked or with photos) + clusters of located photos (≤ 150 m from the \
             cluster's first photo and ≤ 10 min after its last), sorted by arrival then id; photos without GPS join the \
             stop nearest in time if ≤ 10 min away, else the leg they were taken on. legs.count == stops.count + 1; \
-            songs go to the leg they started on. Distances are along the track (null without one).
+            songs that start during a stop (arrival…departure, inclusive) go to that stop, others to the leg they started on. Distances are along the track (null without one).
             """, cases: {
             let start = Build.t("2026-11-18T04:00:00Z")
             let ride = Build.track(start: start, legs: [(900, 10, 0), (300, 0.5, 0), (600, 12, 30), (900, 12, 60)])
@@ -548,7 +549,8 @@ struct SharedFixtureTests {
                 stops: trail.stops.map { stop in
                     let kind: String = if case .spot = stop.kind { "spot" } else { "cluster" }
                     return .init(id: stop.id, kind: kind, at: LatLon(stop.coordinate), arrivedAt: stop.arrivedAt.timeIntervalSince1970,
-                                 departedAt: stop.departedAt.timeIntervalSince1970, distanceFromStart: stop.distanceFromStart, mediaIDs: stop.mediaIDs)
+                                 departedAt: stop.departedAt.timeIntervalSince1970, distanceFromStart: stop.distanceFromStart, mediaIDs: stop.mediaIDs,
+                                 songIDs: stop.songIDs)
                 },
                 legs: trail.legs.map { .init(start: $0.start.timeIntervalSince1970, end: $0.end.timeIntervalSince1970,
                                               distance: $0.distance, mediaIDs: $0.mediaIDs, songIDs: $0.songIDs) })

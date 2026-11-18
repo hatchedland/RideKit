@@ -1,5 +1,5 @@
 {
-  "about" : "Trail.build: stops = spots (marked or with photos) + clusters of located photos (≤ 150 m from the cluster's first photo and ≤ 10 min after its last), sorted by arrival then id; photos without GPS join the stop nearest in time if ≤ 10 min away, else the leg they were taken on. legs.count == stops.count + 1; songs go to the leg they started on. Distances are along the track (null without one).",
+  "about" : "Trail.build: stops = spots (marked or with photos) + clusters of located photos (≤ 150 m from the cluster's first photo and ≤ 10 min after its last), sorted by arrival then id; photos without GPS join the stop nearest in time if ≤ 10 min away, else the leg they were taken on. legs.count == stops.count + 1; songs that start during a stop (arrival…departure, inclusive) go to that stop, others to the leg they started on. Distances are along the track (null without one).",
   "cases" : [
     {
       "expected" : {
@@ -17,9 +17,7 @@
             "distance" : 2525.2402721037543,
             "end" : 1794975350,
             "mediaIDs" : [],
-            "songIDs" : [
-              "song-2"
-            ],
+            "songIDs" : [],
             "start" : 1794975050
           },
           {
@@ -55,7 +53,8 @@
             "mediaIDs" : [
               "at-spot",
               "no-gps-joins-spot"
-            ]
+            ],
+            "songIDs" : []
           },
           {
             "arrivedAt" : 1794975350,
@@ -71,6 +70,9 @@
               "cluster1-a",
               "cluster1-b",
               "joins-cluster1"
+            ],
+            "songIDs" : [
+              "song-2"
             ]
           },
           {
@@ -85,7 +87,8 @@
             "kind" : "cluster",
             "mediaIDs" : [
               "cluster2"
-            ]
+            ],
+            "songIDs" : []
           }
         ]
       },
@@ -743,7 +746,8 @@
             "kind" : "cluster",
             "mediaIDs" : [
               "p1"
-            ]
+            ],
+            "songIDs" : []
           },
           {
             "arrivedAt" : 1794975400,
@@ -756,7 +760,8 @@
             "kind" : "cluster",
             "mediaIDs" : [
               "p2"
-            ]
+            ],
+            "songIDs" : []
           }
         ]
       },
