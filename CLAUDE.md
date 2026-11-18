@@ -1,6 +1,7 @@
 # Ride Tracker — project rules
 
 Native iOS app for **motorcycle / scooter** rides, built around **places**. Full product plan: [PLAN.md](PLAN.md).
+Android port (planned 2026-11-18): [PLAN-ANDROID.md](PLAN-ANDROID.md).
 Setup and release checklist: [README.md](README.md).
 
 ## Product rules (decided with the owner — don't change without asking)
@@ -144,6 +145,8 @@ Setup and release checklist: [README.md](README.md).
   top-level models are always the latest. Every schema change needs a migration test from the previous
   version (see `RideTrackerTests/MigrationTests.swift`).
 - A ride's track is **one compressed blob** (`TrackCodec`), never one row per GPS point.
+  Format v2 (raw DEFLATE, Unix time) is specified in `spec/track-codec.md` and shared with Android;
+  change it only with a new version number and a new golden file in `spec/fixtures`.
 - Pure logic belongs in **`Packages/RideKit`** (no UIKit/SwiftUI/SwiftData there) with tests.
   App code (`RideTracker/`) maps models to RideKit value types (`SpotReference`, `MediaCandidate`).
 - `Shared/` is compiled into both the app and the widget extension — it must not reference app-only
