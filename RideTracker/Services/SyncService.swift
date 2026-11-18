@@ -114,6 +114,8 @@ final class SyncService {
 
         // Track files first, so a ride row never points at a file that isn't there.
         for ride in rides {
+            // Old LZFSE tracks become v2 first, so Android can read every file in Storage.
+            if let old = ride.trackData, let upgraded = TrackCodec.upgraded(old) { ride.trackData = upgraded }
             guard let data = ride.trackData else { continue }
             let hash = Self.hash(data)
             guard state.trackHashes[ride.id] != hash else { continue }

@@ -40,7 +40,7 @@ struct TrackStorageTests {
         let decoded = try TrackCodec.decode(TrackCodec.encode(points))
         #expect(decoded.count == points.count)
         for (a, b) in zip(points, decoded) {
-            #expect(a.timestamp == b.timestamp)
+            #expect(abs(a.timestamp.timeIntervalSince(b.timestamp)) < 1e-6)
             #expect(a.coordinate == b.coordinate)       // doubles: exact
             #expect(a.speed.map(Float.init) == b.speed.map(Float.init))
             #expect(a.lean.map(Float.init) == b.lean.map(Float.init))
@@ -61,6 +61,38 @@ struct TrackStorageTests {
 
     @Test func codecEmptyTrack() throws {
         #expect(try TrackCodec.decode(TrackCodec.encode([])).isEmpty)
+    }
+
+    @Test func codecWritesPortableV2() throws {
+        let data = try TrackCodec.encode(Fixtures.track(segments: [(30, 10)]))
+        #expect(Array(data.prefix(4)) == Array("RTK".utf8) + [2])
+        #expect(!TrackCodec.isLegacy(data))
+        #expect(TrackCodec.upgraded(data) == nil)
+    }
+
+    @Test func codecReadsAndUpgradesV1() throws {
+        var points = Fixtures.track(segments: [(120, 12)])
+        points[2].lean = 18
+        let old = try TrackCodec.encodeV1(points)
+        #expect(TrackCodec.isLegacy(old))
+        #expect(try TrackCodec.decode(old) == points)
+
+        let upgraded = try #require(TrackCodec.upgraded(old))
+        #expect(!TrackCodec.isLegacy(upgraded))
+        let decoded = try TrackCodec.decode(upgraded)
+        #expect(decoded.count == points.count)
+        for (a, b) in zip(points, decoded) {
+            #expect(abs(a.timestamp.timeIntervalSince(b.timestamp)) < 1e-6)
+            #expect(a.coordinate == b.coordinate)
+        }
+    }
+
+    @Test func codecRejectsUnknownVersionAndTruncation() throws {
+        #expect(throws: TrackCodec.DecodeError.unsupportedVersion(9)) {
+            try TrackCodec.decode(Data("RTK".utf8) + [9, 1, 0, 0, 0])
+        }
+        let data = try TrackCodec.encode(Fixtures.track(segments: [(60, 10)]))
+        #expect(throws: TrackCodec.DecodeError.truncated) { try TrackCodec.decode(data.prefix(20)) }
     }
 
     @Test func bufferRecoversAfterCrash() throws {

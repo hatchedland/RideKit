@@ -1,0 +1,9 @@
+{
+  "about": "Points encoded in track-v2.bin (TrackCodec v2). Both apps' tests decode the .bin and expect exactly these values. Floats are Float32 on disk: compare altitude/speed/course/hAcc/lean as Float32. null = unknown (NaN on disk).",
+  "points": [
+    { "t": 1795000000.0, "lat": 28.612912, "lon": 77.22951, "alt": 216.5, "speed": 0.0, "course": null, "hAcc": 4.0, "lean": null },
+    { "t": 1795000001.0, "lat": 28.6130471, "lon": 77.2295133, "alt": 216.75, "speed": 15.0, "course": 0.5, "hAcc": 5.0, "lean": -12.25 },
+    { "t": 1795000002.25, "lat": 28.6131822, "lon": 77.2295171, "alt": null, "speed": null, "course": 359.0, "hAcc": 8.5, "lean": 32.5 },
+    { "t": 1795000003.5, "lat": -33.8567844, "lon": -151.213108, "alt": -2.0, "speed": 27.75, "course": 180.0, "hAcc": 65.0, "lean": 0.0 }
+  ]
+}
