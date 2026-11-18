@@ -8,7 +8,7 @@ import Testing
 
 enum SharedFixture {
     static let dir = URL(filePath: #filePath).deletingLastPathComponent()
-        .appending(path: "../../../../spec/fixtures").standardized
+        .appending(path: "../../../../../spec/fixtures").standardized
     static var writing: Bool { ProcessInfo.processInfo.environment["RIDEKIT_WRITE_FIXTURES"] == "1" }
 
     struct File<Input: Codable, Output: Codable & Equatable>: Codable {

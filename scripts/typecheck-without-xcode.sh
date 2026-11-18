@@ -14,19 +14,19 @@
 # "unavailable in macOS"; those are expected and listed separately.
 #
 # Once Xcode is installed, build the real thing instead:
-#   xcodegen generate && xcodebuild -scheme RideTracker -destination 'generic/platform=iOS Simulator' build
+#   xcodegen generate --spec ios/project.yml && xcodebuild -project ios/RideTracker.xcodeproj -scheme RideTracker -destination 'generic/platform=iOS Simulator' build
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-swift build --package-path "$ROOT/Packages/RideKit" -c debug >/dev/null
-MODULES="$ROOT/Packages/RideKit/.build/arm64-apple-macosx/debug/Modules"
+swift build --package-path "$ROOT/ios/Packages/RideKit" -c debug >/dev/null
+MODULES="$ROOT/ios/Packages/RideKit/.build/arm64-apple-macosx/debug/Modules"
 
 mkdir -p "$WORK/app" "$WORK/widget"
-cp -R "$ROOT/RideTracker/." "$WORK/app/"
+cp -R "$ROOT/ios/RideTracker/." "$WORK/app/"
 cp "$ROOT"/Shared/*.swift "$WORK/app/"
-cp "$ROOT"/RideTrackerWidgets/*.swift "$ROOT"/Shared/*.swift "$WORK/widget/"
+cp "$ROOT"/ios/RideTrackerWidgets/*.swift "$ROOT"/ios/Shared/*.swift "$WORK/widget/"
 
 python3 - "$WORK/app" "$WORK/widget" <<'PY'
 import pathlib, re, sys

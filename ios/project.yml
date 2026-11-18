@@ -31,8 +31,10 @@ settings:
 fileGroups:
   - Config
   - TestRoutes
-  - PLAN.md
-  - README.md
+  - ../PLAN.md
+  - ../PLAN-ANDROID.md
+  - ../README.md
+  - ../spec
 
 packages:
   RideKit:

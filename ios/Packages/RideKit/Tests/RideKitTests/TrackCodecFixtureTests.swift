@@ -18,7 +18,7 @@ struct TrackCodecFixtureTests {
     }
 
     static let dir = URL(filePath: #filePath).deletingLastPathComponent()
-        .appending(path: "../../../../spec/fixtures").standardized
+        .appending(path: "../../../../../spec/fixtures").standardized
 
     @Test func goldenFileDecodes() throws {
         let expected = try JSONDecoder().decode(File.self, from: Data(contentsOf: Self.dir.appending(path: "track-v2.json"))).points

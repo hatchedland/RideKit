@@ -19,9 +19,9 @@ TEAM_ID="${1:-${TEAM_ID:-}}"
 if [ -z "$TEAM_ID" ] && [ -f "$TEAM_FILE" ]; then
   TEAM_ID=$(cat "$TEAM_FILE")
 fi
-if [ -z "$TEAM_ID" ] && [ -f RideTracker.xcodeproj/project.pbxproj ]; then
+if [ -z "$TEAM_ID" ] && [ -f ios/RideTracker.xcodeproj/project.pbxproj ]; then
   # Picked in Xcode › target › Signing & Capabilities › Team (lost on the next xcodegen run).
-  TEAM_ID=$(grep -o 'DEVELOPMENT_TEAM = [A-Z0-9]\{10\};' RideTracker.xcodeproj/project.pbxproj \
+  TEAM_ID=$(grep -o 'DEVELOPMENT_TEAM = [A-Z0-9]\{10\};' ios/RideTracker.xcodeproj/project.pbxproj \
     | head -1 | sed 's/DEVELOPMENT_TEAM = \(.*\);/\1/' || true)
 fi
 if [ -z "$TEAM_ID" ]; then
@@ -35,7 +35,7 @@ if [ -z "$TEAM_ID" ]; then
     | sed -n 's/.*teamID = \([A-Z0-9]\{10\}\);.*/\1/p' | head -1 || true)
 fi
 if [ -z "$TEAM_ID" ]; then
-  echo "No development team found. Once: open RideTracker.xcodeproj, select the RideTracker target ›" >&2
+  echo "No development team found. Once: open ios/RideTracker.xcodeproj, select the RideTracker target ›" >&2
   echo "Signing & Capabilities › Team › your \"(Personal Team)\", then run this again." >&2
   echo "(Or pass your Team ID: ./scripts/run-on-iphone.sh ABCDE12345)" >&2
   exit 1
@@ -50,8 +50,8 @@ fi
 
 echo "$TEAM_ID" > "$TEAM_FILE"
 echo "Team $TEAM_ID → iPhone $DEVICE_ID"
-xcodegen generate --quiet
-xcodebuild -project RideTracker.xcodeproj -scheme "RideTracker (Personal)" \
+xcodegen generate --quiet --spec ios/project.yml
+xcodebuild -project ios/RideTracker.xcodeproj -scheme "RideTracker (Personal)" \
   -destination "id=$DEVICE_ID" -derivedDataPath build/DerivedData \
   -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM_ID" build | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)"
 

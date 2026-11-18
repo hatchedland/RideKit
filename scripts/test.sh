@@ -4,7 +4,7 @@
 # Swift Testing lives outside the default search path, so we point the compiler at it. Its
 # Foundation overlay ships without module files there, so cross-import overlays are turned off.
 set -euo pipefail
-cd "$(dirname "$0")/../Packages/RideKit"
+cd "$(dirname "$0")/../ios/Packages/RideKit"
 
 CLT_FRAMEWORKS=/Library/Developer/CommandLineTools/Library/Developer/Frameworks
 if xcode-select -p | grep -q CommandLineTools && [ -d "$CLT_FRAMEWORKS" ]; then

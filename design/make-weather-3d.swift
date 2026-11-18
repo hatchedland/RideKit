@@ -4,12 +4,12 @@
 //
 //   swift design/make-weather-3d.swift [asset-catalog-dir] [pixels]     (needs Xcode: SceneKit + Metal)
 //
-// Writes one imageset per sky into <dir>/Weather (default RideTracker/Resources/Assets.xcassets),
+// Writes one imageset per sky into <dir>/Weather (default ios/RideTracker/Resources/Assets.xcassets),
 // rendered at 3x for a 120 pt image. Everything is procedural, so it's reproducible and tweakable here.
 import AppKit
 import SceneKit
 
-let catalog = CommandLine.arguments.dropFirst().first ?? "RideTracker/Resources/Assets.xcassets"
+let catalog = CommandLine.arguments.dropFirst().first ?? "ios/RideTracker/Resources/Assets.xcassets"
 let side = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) ?? 360 : 360
 
 func color(_ hex: UInt32) -> NSColor {
