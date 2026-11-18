@@ -61,8 +61,13 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 - [x] `spec/fixtures` for Trail, WishlistMatcher (+ StopDetector, RevisitDetector), RideTimePlan (+ RidePace,
       Sun), WeatherAlerts, FamousPlaces, SharePrivacy, RideNaming; Swift tests check them on every run
       ([how they work](spec/fixtures/README.md)).
-- [ ] Migration: `media_links.platform` (`ios` | `android`) + `device_id`. Each phone resolves only its own media.
-- [ ] Migration: `app_config` table (`min_version` per platform) + forced-upgrade screen on iOS.
+- [x] ~~`media_links.platform` + `device_id`~~ — dropped: upserts send every column, so a phone editing
+      another platform's link would overwrite its photo id. Instead each platform gets **its own id
+      columns** (iOS: `local_identifier` / `cloud_identifier`; Android: `android_media_id`, added in the
+      Android sync PR) and only ever sends its own. iOS needs no change (unknown columns are ignored).
+- [x] `app_config` (`min_version`, `store_url` per platform; migration 20261118100000, applied
+      2026-11-18; readable signed out, owner-edited in SQL). iOS: RideKit `AppVersion`, update screen
+      (never during a ride), and **sync stops** while the build is too old.
 - [ ] Server-side shared-ride publishing (`publish_shared_ride`): trimming happens in the backend.
 - [ ] Android Google API key (package + SHA-1 restricted; Maps SDK, Places, Routes, Weather).
 - [ ] Repo move to `apps/ios`, `apps/android`, `backend/supabase` (one PR, scripts + CLAUDE.md updated).

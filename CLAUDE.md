@@ -134,6 +134,10 @@ Setup and release checklist: [README.md](README.md).
   Storage files (tracks, shared), then `delete_my_account()` deletes the auth user, which cascades to
   every row of theirs; then this phone's copy is erased. Photos and Ride Tracker albums stay. Every
   new table must reference `auth.users` with `on delete cascade`, or deletion leaves data behind.
+- **Minimum version (2026-11-18)**: `app_config.min_version` per platform. Raise it (in SQL) when a schema
+  change would break an older build; that build then shows `UpdateRequiredView` (never during a ride)
+  and stops syncing. Two apps share these tables, so sync payloads only ever carry a platform's own
+  columns (e.g. photo ids), never the other platform's.
 - Always the latest non-deprecated APIs, e.g. `CLLocationUpdate.liveUpdates` + `CLServiceSession` +
   `CLBackgroundActivitySession` (only "When In Use" permission — never ask for "Always"),
   `MKReverseGeocodingRequest` (not `CLGeocoder`), `MKMapItem.location` / `.address` (not `placemark`).
