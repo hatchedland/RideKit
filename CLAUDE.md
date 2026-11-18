@@ -80,12 +80,14 @@ Setup and release checklist: [README.md](README.md).
   a ride are logged with time and place, opened via Apple Music links. YouTube Music, Spotify and
   other apps are not readable by iOS apps — songs can only be logged from the Music app; don't
   promise otherwise (checked with the owner 2026-11-16: tracking stays Apple Music only). Uses MediaPlayer (no MusicKit entitlement, so it works
-  on free Personal builds).
+  on free Personal builds). **Android logs every music app** — Spotify, YouTube Music, Apple Music and
+  others — through notification access (decided 2026-11-18), so the platforms differ here on purpose.
 - **No GoPro / action-camera support.** Photos without GPS stay in the album, just unpinned.
 - **Photo trail** is the default way a ride's media is shown: stops (spots, or photo clusters within
   150 m / 10 min) joined by the road between them. Unnamed stops are **suggested, never auto-saved**
   as spots ("Save as spot"). Photos without GPS go into the trail by capture time but **never get a
-  map pin**.
+  map pin**. A song that starts during a stop (arrival to departure) belongs to **that stop**, others
+  to the road it started on (decided 2026-11-18).
 - **Bikes and scooters only.** No car mode or vehicle type.
 - **App Store release target. Account required, everything in Supabase (decided 2026-11-16).** The app
   opens on sign-in; nothing (riding included, Siri/Action button too) works signed out. Every ride
@@ -127,9 +129,12 @@ Setup and release checklist: [README.md](README.md).
 - iOS 26+, Swift 6 strict concurrency, SwiftUI. **Apple frameworks only — the exceptions are the
   Google Maps SDK for iOS and supabase-swift** (SPM, pinned in `project.yml`). No other third-party
   dependencies. Supabase host + publishable key live in git-ignored `Config/Secrets.xcconfig`.
-- **Accounts (decided 2026-11-16): Supabase Auth, passwordless email link** (`AccountService`,
-  `ridetracker://auth-callback`). Free projects can't customise the default email template, so the
-  6-digit code waits for an own SMTP sender (before App Store). Signed out, only the sign-in screen shows.
+- **Accounts (decided 2026-11-16; sign-in methods 2026-11-18): Supabase Auth, Sign in with Apple and
+  Google only — no email/password, no email links**, on iOS and Android (`AccountService`). Apple: the
+  native sheet → `signInWithIdToken` (nonce; entitlement in Debug/Release; **hidden in Personal builds**,
+  free teams can't sign it). Google: `signInWithOAuth` in an `ASWebAuthenticationSession` back to
+  `ridetracker://auth-callback` (no Google SDK). The same verified email is the same account whichever
+  way a rider signs in; Apple "Hide My Email" makes a separate one. Signed out, only the sign-in screen shows.
   **Delete account (2026-11-17, guideline 5.1.1(v))**: Settings › Delete account removes the rider's
   Storage files (tracks, shared), then `delete_my_account()` deletes the auth user, which cascades to
   every row of theirs; then this phone's copy is erased. Photos and Ride Tracker albums stay. Every

@@ -25,7 +25,13 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 
 - **Recording**: foreground service, `foregroundServiceType="location"`, **while-in-use permission only**
   (never `ACCESS_BACKGROUND_LOCATION`). Port `TrackBuffer` crash recovery.
-- **Sign-in**: Supabase magic link via verified App Links (`https://…/auth-callback`).
+- **Sign-in (decided 2026-11-18)**: Apple and Google only, like iOS. Google: Credential Manager
+  (`androidx.credentials` + Google ID) → `signInWithIdToken`. Apple: Supabase OAuth in a Custom Tab
+  (needs Apple's Services ID + secret key in Supabase; the key expires every 6 months).
+- **Music (decided 2026-11-18)**: log **every music app** (Spotify, YouTube Music, Apple Music…) via a
+  `NotificationListenerService` + `MediaSessionManager`, asked for in context (Settings › Ride
+  soundtrack), with a clear "only song titles while you ride" explanation. Play reviews this
+  permission: the store listing and Data safety form must say why.
 - **Push** (chat, later): an Edge Function that sends to FCM and APNs.
 
 ## 3. Platform mapping (UX)
@@ -41,7 +47,7 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 | "Open Photos" opens the app only | Opens the exact item (`ACTION_VIEW` on the content URI) |
 | SF expanded width numbers | Roboto Flex (width axis) bundled for `readout` / `stat` / `label` |
 | Template PDF icons | `make-icons.swift` also emits SVG → VectorDrawable; weather 3D art as WebP |
-| Apple Music now-playing | **Open question Q1** |
+| Apple Music now-playing (Music app only) | Any music app via notification access |
 
 **Android-only flows**
 1. **Permissions in context**: location + notifications when the rider taps Start ("so the ride keeps
@@ -86,12 +92,13 @@ Friends, shared rides, live rides, group chat; push for both platforms.
 ### Phase 4 — Play Store
 - Data safety form; foreground-service location declaration + video.
 - **Web page for account-deletion requests** (Play requires one besides the in-app button).
+- **Revoke Sign in with Apple tokens when an account is deleted** (App Store guideline 5.1.1(v), also
+  before the iOS release): an Edge Function calls Apple's `/auth/revoke` with the app's client secret.
 - **New personal developer accounts need 12 testers for 14 days of closed testing** before production:
   start this as soon as Phase 1 is usable.
 
-## 5. Open questions (owner)
+## 5. Decided (2026-11-18)
 
-1. **Music**: Android *can* read Spotify / YouTube Music now-playing via notification-listener access
-   (Play reviews that permission strictly). Log all apps on Android, or keep Apple-Music-only parity?
-2. **Sign in with Google** (Credential Manager) on Android alongside the email link?
-3. Apple Sign In / Google Sign In parity on iOS if (2) is yes?
+1. **Music**: Android logs every music app (notification access); iOS stays Music-app only.
+2. **Sign-in**: Apple and Google on both platforms; email sign-in removed.
+3. **Trail**: a song that starts during a stop belongs to that stop.

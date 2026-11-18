@@ -13,6 +13,8 @@ _Last updated: 2026-11-17. `CLAUDE.md` holds the current product rules; where th
 
 > **Changed since this plan was written:**
 > - **2026-11-12:** maps inside the app are **Google Maps** (Maps SDK for iOS), not MapKit.
+> - **2026-11-18:** sign-in is **Apple and Google only** (email links removed), on iOS and Android.
+>   Android port planned: [PLAN-ANDROID.md](PLAN-ANDROID.md).
 > - **2026-11-16:** **an account is required** (Supabase Auth, passwordless email link) and
 >   everything syncs to **Supabase**; **CloudKit and iCloud sync are gone**. Friends moved to
 >   Supabase too: riders find each other by **@handle** and send friend requests (no iCloud invite
