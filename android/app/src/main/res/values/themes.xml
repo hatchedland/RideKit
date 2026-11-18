@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the window before Compose draws: asphalt, so launch never flashes white. -->
+    <style name="Theme.RideTracker" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/asphalt</item>
+    </style>
+</resources>
