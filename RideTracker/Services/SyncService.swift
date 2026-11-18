@@ -53,6 +53,9 @@ final class SyncService {
     func sync() async {
         guard status != .syncing, let client = account.client,
               let user = try? await client.auth.session.user else { return }
+        // A build the server calls too old must not write rows newer apps can't read (or vice versa).
+        await account.checkVersion(ifOlderThan: 10 * 60)
+        guard account.updateRequired == nil else { return }
         if let owner = state.userID, owner != user.id {
             // The phone's data belongs to another account (already in that account's cloud copy):
             // never show it to, or upload it into, this one.

@@ -611,4 +611,24 @@ struct SharedFixtureTests {
                                                          existingNames: input.existingNames ?? [], calendar: calendar, locale: locale))
         })
     }
+    // MARK: App version
+
+    struct VersionInput: Codable { var current: String; var minimum: String? }
+
+    @Test func appVersion() throws {
+        try SharedFixture.verify("app-version", about: """
+            AppVersion.needsUpdate(current, minimum): compare numeric parts left to right, missing parts are 0, \
+            anything after the numbers is ignored ("1.3.0-beta" == "1.3.0"). A missing or unreadable minimum \
+            never blocks. `expected` is true when the app must ask the rider to update.
+            """, cases: [
+            ("older", VersionInput(current: "1.1.0", minimum: "1.2.0")),
+            ("same", VersionInput(current: "1.2.0", minimum: "1.2.0")),
+            ("two-digit part", VersionInput(current: "1.10.0", minimum: "1.9.5")),
+            ("short form equals long form", VersionInput(current: "1.2", minimum: "1.2.0")),
+            ("suffix ignored", VersionInput(current: "1.3.0-beta", minimum: "1.3.0")),
+            ("build number ignored", VersionInput(current: "2.0 (45)", minimum: "2.0.1")),
+            ("no minimum", VersionInput(current: "1.0.0", minimum: nil)),
+            ("unreadable minimum never blocks", VersionInput(current: "1.0.0", minimum: "latest")),
+        ], run: { AppVersion.needsUpdate(current: $0.current, minimum: $0.minimum) })
+    }
 }

@@ -1,0 +1,68 @@
+{
+  "about" : "AppVersion.needsUpdate(current, minimum): compare numeric parts left to right, missing parts are 0, anything after the numbers is ignored (\"1.3.0-beta\" == \"1.3.0\"). A missing or unreadable minimum never blocks. `expected` is true when the app must ask the rider to update.",
+  "cases" : [
+    {
+      "expected" : true,
+      "input" : {
+        "current" : "1.1.0",
+        "minimum" : "1.2.0"
+      },
+      "name" : "older"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.2.0",
+        "minimum" : "1.2.0"
+      },
+      "name" : "same"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.10.0",
+        "minimum" : "1.9.5"
+      },
+      "name" : "two-digit part"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.2",
+        "minimum" : "1.2.0"
+      },
+      "name" : "short form equals long form"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.3.0-beta",
+        "minimum" : "1.3.0"
+      },
+      "name" : "suffix ignored"
+    },
+    {
+      "expected" : true,
+      "input" : {
+        "current" : "2.0 (45)",
+        "minimum" : "2.0.1"
+      },
+      "name" : "build number ignored"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.0.0"
+      },
+      "name" : "no minimum"
+    },
+    {
+      "expected" : false,
+      "input" : {
+        "current" : "1.0.0",
+        "minimum" : "latest"
+      },
+      "name" : "unreadable minimum never blocks"
+    }
+  ]
+}

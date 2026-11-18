@@ -19,6 +19,18 @@ struct RootView: View {
     @Environment(SyncService.self) private var sync
 
     var body: some View {
+        // A too-old build asks for an update, but never interrupts a ride (or its summary).
+        if let update = account.updateRequired, recorder.phase == .idle, recorder.finishedRideID == nil {
+            UpdateRequiredView(update: update)
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { Task { await account.checkVersion() } }
+                }
+        } else {
+            signedInOrNot
+        }
+    }
+
+    @ViewBuilder private var signedInOrNot: some View {
         switch account.state {
         case .checking:
             // Reading the saved session; a blank asphalt screen, not a sign-in flash.
@@ -73,7 +85,7 @@ struct RootView: View {
             Text("“\(ride.name)” stopped recording unexpectedly. Everything up to that point is safe.")
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await recorder.runLateSweeps(); await syncIfIdle() } }
+            if phase == .active { Task { await account.checkVersion(ifOlderThan: 10 * 60); await recorder.runLateSweeps(); await syncIfIdle() } }
         }
         // Everything lives in the rider's account: sync on sign-in, after each ride, and every
         // minute while the app is open. Not during a ride (battery, data); the ride syncs at End.

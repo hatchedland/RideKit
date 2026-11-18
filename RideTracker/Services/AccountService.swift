@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import OSLog
+import RideKit
 import Supabase
 
 /// The rider's Ride Tracker account (Supabase Auth). Required: signed out, the app shows only sign-in.
@@ -53,7 +54,57 @@ final class AccountService {
             client = nil
             state = .signedOut
         }
+        applyVersionConfig(UserDefaults.standard.stringArray(forKey: Self.versionConfigKey))
         Task { await watchSession() }
+        Task { await checkVersion() }
+    }
+
+    // MARK: Minimum version
+
+    /// The server says this build is too old to sync (`app_config.min_version`). The app then asks the
+    /// rider to update — never during a ride — and stops syncing until they do.
+    struct UpdateRequired: Equatable {
+        var minimum: String
+        var storeURL: URL?
+    }
+
+    private(set) var updateRequired: UpdateRequired?
+    private var versionCheckedAt: Date?
+    private static let versionConfigKey = "appConfig.ios"
+    nonisolated static var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    /// Reads the oldest allowed version. Offline, the last answer stands (saved on the phone), so a
+    /// rider with no signal is never newly blocked and an old build never syncs after being told not to.
+    func checkVersion(ifOlderThan maxAge: TimeInterval = 0) async {
+        guard let client else { return }
+        if let checked = versionCheckedAt, Date.now.timeIntervalSince(checked) < maxAge { return }
+        struct Row: Decodable {
+            var minVersion: String
+            var storeURL: String?
+            enum CodingKeys: String, CodingKey { case minVersion = "min_version", storeURL = "store_url" }
+        }
+        do {
+            let row: Row = try await client.from("app_config").select("min_version, store_url")
+                .eq("platform", value: "ios").single().execute().value
+            let saved = [row.minVersion, row.storeURL ?? ""]
+            UserDefaults.standard.set(saved, forKey: Self.versionConfigKey)
+            applyVersionConfig(saved)
+            versionCheckedAt = .now
+        } catch {
+            Self.log.info("Version check skipped: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func applyVersionConfig(_ saved: [String]?) {
+        guard let saved, let minimum = saved.first,
+              AppVersion.needsUpdate(current: Self.currentVersion, minimum: minimum) else {
+            updateRequired = nil
+            return
+        }
+        let store = saved.count > 1 ? saved[1] : ""
+        updateRequired = UpdateRequired(minimum: minimum, storeURL: store.isEmpty ? nil : URL(string: store))
     }
 
     /// Follows sign-in, sign-out and session refreshes, including a session restored at launch.
