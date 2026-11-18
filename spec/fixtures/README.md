@@ -1,6 +1,6 @@
 # Shared golden fixtures
 
-The behaviour both apps must agree on, as data. The Swift RideKit (`Packages/RideKit`) and the
+The behaviour both apps must agree on, as data. The Swift RideKit (`ios/Packages/RideKit`) and the
 Kotlin `ridekit` module load the same files here and must produce the same `expected` values.
 If the platforms disagree, the app is wrong — not the rider.
 
@@ -22,7 +22,7 @@ If the platforms disagree, the app is wrong — not the rider.
   "cases": [ { "name": "…", "input": { … }, "expected": { … } } ] }
 ```
 
-Each file's `about` and the Swift test (`Packages/RideKit/Tests/RideKitTests/SharedFixtures.swift`)
+Each file's `about` and the Swift test (`ios/Packages/RideKit/Tests/RideKitTests/SharedFixtures.swift`)
 say exactly which functions run on `input`. Conventions:
 
 - **Times** are Unix seconds (Double). **Distances** are meters. **Coordinates** are `{"lat", "lon"}`.

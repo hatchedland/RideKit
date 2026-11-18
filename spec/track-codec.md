@@ -1,7 +1,8 @@
 # Track file format (TrackCodec)
 
 One file per ride: on the phone (SwiftData / Room blob), in Storage (`tracks/<user>/<ride>.track`,
-`shared/<user>/<ride>/track`). iOS: `Packages/RideKit/Sources/RideKit/Tracking/TrackCodec.swift`.
+`shared/<user>/<ride>/track`). iOS: `ios/Packages/RideKit/Sources/RideKit/Tracking/TrackCodec.swift`; server:
+`supabase/functions/_shared/track-codec.ts`.
 Android must produce and read byte-compatible files. The golden file is `fixtures/track-v2.bin`,
 with its expected values in `fixtures/track-v2.json`; both apps' tests decode it.
 

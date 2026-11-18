@@ -4,6 +4,11 @@ Native iOS app for **motorcycle / scooter** rides, built around **places**. Full
 Android port (planned 2026-11-18): [PLAN-ANDROID.md](PLAN-ANDROID.md).
 Setup and release checklist: [README.md](README.md).
 
+**Repo layout (2026-11-18):** `ios/` (the iOS app, its tests, widget, `Shared`, `Packages/RideKit`,
+`project.yml`, `Config`), `android/` (coming in Phase 1), and at the root `supabase/` (the CLI expects it
+there), `spec/` (formats + golden files both apps test against), `design/` and `scripts/`. **iOS paths
+below (`RideTracker/…`, `Shared/…`, `Packages/RideKit`, `Config/…`) are relative to `ios/`.**
+
 ## Product rules (decided with the owner — don't change without asking)
 
 - **Spots are the core.** Every spot stores a Google Maps URL built with the official Maps URLs format
@@ -189,13 +194,14 @@ Setup and release checklist: [README.md](README.md).
   copy is Supabase), so every feature works in **Personal** (scheme "RideTracker (Personal)", flag
   `PERSONAL_TEAM`) for free-Apple-ID device testing. Keep new capabilities out of Personal unless free
   teams support them.
-- `RideTracker.xcodeproj` is **generated** by XcodeGen from `project.yml` and not committed. Change
-  targets, capabilities, Info.plist keys and entitlements in `project.yml`, then `xcodegen generate`.
+- `ios/RideTracker.xcodeproj` is **generated** by XcodeGen from `ios/project.yml` and not committed. Change
+  targets, capabilities, Info.plist keys and entitlements in `project.yml`, then `xcodegen generate` in `ios/`.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
+| `ios/` | Everything iOS; the rows below up to `TestRoutes` live in it |
 | `Packages/RideKit` | Google Maps links, GPS filter, stats, auto-pause, track codec + crash buffer, album window, photo placement, photo trail (`Trail`), wishlist matching, ride naming, arrival time (`RidePace`, `RideTimePlan`), GPX/KML, song log + Apple Music links, friends (`SharePrivacy`, `SharedRide`, `LiveRide`, `LivePublishThrottle`), group chat (`ChatTimeline`, `ChatLayout`, `ChatText`), famous places ahead (`FamousPlaces`), weather (`GoogleWeather`, `WeatherAlerts`, `Sun`) |
 | `RideTracker/Models` | SwiftData `Spot`, `Ride`, `MediaLink`, `PlayedSong`; versioned schema (V1, V2 frozen; V3 current) |
 | `RideTracker/Services` | `RideRecorder` (the ride lifecycle), `LocationService`, `PhotoLibraryService`, `SpotService`, `MediaOrganizer`, `TrailNamer` (suggested stop names, cached on device), `MusicService`, `LiveActivityController`, `AccountService` (sign-in), `GooglePlacesClient` (Google Places, Routes and Weather requests; Debug fake weather), `SyncService` + `SyncRows` (Supabase sync), `FriendsService` + `FriendsBackend` (friends on Supabase), `ChatService` + `ChatBackend` (group chat), `AppSettings` |
@@ -204,18 +210,21 @@ Setup and release checklist: [README.md](README.md).
 | `Shared` | `RideActivityAttributes`, App Intents, `Brand` (palette, type, milestone shape) |
 | `design` | Art drawn in code: `make-icon-tread.swift` (app icon), `make-icon-3d.swift` (retired km-stone icon), `make-stone-3d.swift` (distance stone), `make-weather-3d.swift` (3D weather → `Assets.xcassets/Weather`), `make-icons.swift` (line icons), `make-icon.swift` (older flat icon) |
 | `TestRoutes` | GPX files for simulator playback |
+| `supabase/` (root) | Migrations, Edge Functions (`publish-shared-ride`, shared logic in `functions/_shared`) |
+| `spec/` (root) | Track file format and golden fixtures both apps (and the Edge Functions) test against |
 
 ## Commands
 
 ```sh
 ./scripts/test.sh                       # RideKit unit tests (works with only Command Line Tools)
-xcodegen generate                       # regenerate the Xcode project after editing project.yml
-xcodebuild -scheme RideTracker -destination 'platform=iOS Simulator,name=iPhone 17' test   # needs Xcode
+./scripts/test-functions.sh             # Edge Functions' shared logic vs spec/fixtures (Node 23+)
+(cd ios && xcodegen generate)           # regenerate the Xcode project after editing ios/project.yml
+xcodebuild -project ios/RideTracker.xcodeproj -scheme RideTracker -destination 'platform=iOS Simulator,name=iPhone 17' test   # needs Xcode
 ./scripts/run-on-iphone.sh              # free Personal build (no iCloud) → USB iPhone
 ./scripts/typecheck-without-xcode.sh    # stopgap type-check on the macOS SDK when Xcode isn't installed
 ```
 
-Before committing: RideKit tests pass, and the app builds (or, without Xcode, the type-check script
+Before committing: RideKit tests pass (and `test-functions.sh` when `supabase/functions` or `spec/` changed), and the app builds (or, without Xcode, the type-check script
 reports 0 real errors). New logic needs tests; aim for ≥ 80% coverage on new code.
 
 ## Git

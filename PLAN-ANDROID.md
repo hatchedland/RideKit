@@ -9,7 +9,7 @@ a rider can switch phones and keep everything.
 | # | Decision | Why |
 |---|---|---|
 | A1 | **The backend stays Supabase, no own API server.** Both apps talk to Postgres (RLS + RPCs), Storage and Realtime directly. | A server would add cost, latency and ops for zero new capability. |
-| A2 | **One repo, three folders** (`apps/ios`, `apps/android`, `backend/supabase`) plus `spec/`. | One person, one PR per change: schema + both apps land together. |
+| A2 | **One repo**: `ios/`, `android/`, and at the root `supabase/` (where its CLI expects it), `spec/`, `design/`, `scripts/`. | One person, one PR per change: schema + both apps land together. |
 | A3 | **RideKit is ported to a pure Kotlin module (`ridekit`)**, file for file, not shared via KMP or Swift-on-Android. | ~3.1k lines; a port is cheaper than changing the iOS architecture and keeps "Apple frameworks only" on iOS. |
 | A4 | **Both RideKits run the same golden fixtures** from `spec/fixtures` (JSON in → expected out). | Keeps thresholds (150 m, 2 min, 500 reviews…) and algorithms identical on both platforms. |
 | A5 | **Anything privacy-critical runs on the server.** Shared-ride trimming (first/last 500 m, privacy zones) moves into the backend. | Two client implementations = two chances to leak a home address. |
@@ -84,7 +84,8 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
       `authenticated`, and let riders only *delete* in the `shared` bucket. Then the app can't skip the
       server's trimming.
 - [ ] Android Google API key (package + SHA-1 restricted; Maps SDK, Places, Routes, Weather).
-- [ ] Repo move to `apps/ios`, `apps/android`, `backend/supabase` (one PR, scripts + CLAUDE.md updated).
+- [x] Repo move: iOS into `ios/` (2026-11-18); `supabase/`, `spec/`, `design/`, `scripts/` stay at the root, so
+      every command is unchanged. `android/` arrives with Phase 1.
 
 ### Phase 1 — Android MVP
 Sign-in + @handle, Start ride → record (FGS) → Mark spot (button, notification, QS tile) → End,

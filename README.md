@@ -39,15 +39,15 @@ product rules; [PLAN.md](PLAN.md) is the original plan and its history.
 
 **Look:** the *Milestone* brand, after the Indian highway km-stone: highway yellow, asphalt and chalk,
 wide signboard numbers, and a dark "instrument cluster" riding screen. The rules live in
-`Shared/Brand.swift`.
+`ios/Shared/Brand.swift`.
 
 ## Project layout
 
 | Path | What's there |
 |---|---|
+| `ios/` | The iOS app; the rows below up to `project.yml` are inside it |
 | `Packages/RideKit` | Pure Swift logic, fully unit-tested: Google Maps link building/parsing, Google Places / Routes / Weather requests and parsing, GPS filtering, ride stats, auto-pause, track storage and crash recovery, the ride-album time window, photo↔spot matching, wishlist auto-visit, famous places ahead, weather alerts and sunset, ride naming, GPX/KML export, the song log for ride soundtracks, the photo trail (stops, legs, km from start), friends' sharing privacy |
 | `RideTracker/` | The iOS app: SwiftData models (versioned schema with migrations), services (account, Supabase sync, friends, location, Photos albums, spots, music, recorder, Live Activity) and SwiftUI screens, including media sharing |
-| `supabase/` | Database schema, row-level security, storage buckets and friend requests, as migrations |
 | `Config/` | `Secrets.example.xcconfig`: copy to the git-ignored `Secrets.xcconfig` with the Google key and Supabase host/key |
 | `RideTrackerWidgets/` | Live Activity and Dynamic Island, with Mark spot and Pause buttons |
 | `Shared/` | Code compiled into both the app and the widget (activity attributes, App Intents, brand palette and type) |
@@ -55,6 +55,9 @@ wide signboard numbers, and a dark "instrument cluster" riding screen. The rules
 | `TestRoutes/` | GPX routes for simulator location playback |
 | `design/` | Art drawn in code: `make-icon-tread.swift` (the app icon: a tread mark ending in a map pin), `make-icon-3d.swift` (the retired km-stone icon), `make-stone-3d.swift` (the distance stone), `make-weather-3d.swift` (the 3D weather illustrations, written straight into `Assets.xcassets/Weather`), `make-icons.swift` (the line icons). The 3D scripts need Xcode: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift design/make-weather-3d.swift` |
 | `project.yml` | XcodeGen definition. The `.xcodeproj` is generated, not committed |
+| `android/` | The Android app (planned: [PLAN-ANDROID.md](PLAN-ANDROID.md)) |
+| `supabase/` | Database schema, row-level security, storage buckets, as migrations; Edge Functions (`publish-shared-ride` trims shared rides) |
+| `spec/` | The track file format and golden test files both apps and the Edge Functions must match |
 
 ## Getting started
 
@@ -63,17 +66,17 @@ wide signboard numbers, and a dark "instrument cluster" riding screen. The rules
    sudo xcode-select -s /Applications/Xcode.app
    brew install xcodegen
    ```
-2. Copy `Config/Secrets.example.xcconfig` to `Config/Secrets.xcconfig` and fill in the Google key
+2. Copy `ios/Config/Secrets.example.xcconfig` to `ios/Config/Secrets.xcconfig` and fill in the Google key
    and the Supabase host and publishable key (the comments say where each comes from). Without the
    Google key, maps show a placeholder and places, routes and weather stay empty.
 3. Generate and open the project:
    ```sh
-   xcodegen generate
+   cd ios && xcodegen generate
    open RideTracker.xcodeproj
    ```
 4. In **Signing & Capabilities**, pick your team for both targets, or set `DEVELOPMENT_TEAM` in
-   `project.yml`. TestFlight and the App Store need a paid Apple Developer Program membership.
-5. Run on the simulator and sign in (the email link opens the app through `ridetracker://auth-callback`). The scheme replays `TestRoutes/DelhiToMurthal.gpx` (NH-44 at about
+   `ios/project.yml`. TestFlight and the App Store need a paid Apple Developer Program membership.
+5. Run on the simulator and sign in with Apple or Google (Google comes back through `ridetracker://auth-callback`). The scheme replays `ios/TestRoutes/DelhiToMurthal.gpx` (NH-44 at about
    60 km/h, with a 3-minute stop at Kundli). For real background tracking and Live Activities, use
    a device.
 6. **Sample ride (Debug builds only):** add `-seedSampleRide` to the scheme's launch arguments, or
