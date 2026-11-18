@@ -1,0 +1,203 @@
+{
+  "about" : "RideNaming.resolve and .suggestions. Dates use the rider's time zone and the locale's day-month-year abbreviated form (ICU skeleton \"dMMMy\"; en_IN → \"18 Nov 2026\"). Names compare case-insensitively; \"/\" becomes \"-\". Suggestions: recent rides then wishlist names, containing the query, no duplicates, not the exact query, at most 6.",
+  "cases" : [
+    {
+      "expected" : {
+        "name" : "Ride · 18 Nov 2026"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [],
+        "input" : "  ",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "empty name gets the date"
+    },
+    {
+      "expected" : {
+        "name" : "Nandi Hills"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [],
+        "input" : "Nandi Hills",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "typed name kept"
+    },
+    {
+      "expected" : {
+        "name" : "Nandi Hills · 18 Nov 2026"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [
+          "nandi hills"
+        ],
+        "input" : "Nandi Hills",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "taken name gets the date"
+    },
+    {
+      "expected" : {
+        "name" : "Nandi Hills · 18 Nov 2026 (3)"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [
+          "Nandi Hills",
+          "Nandi Hills · 18 Nov 2026",
+          "Nandi Hills · 18 Nov 2026 (2)"
+        ],
+        "input" : "Nandi Hills",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "taken twice gets a counter"
+    },
+    {
+      "expected" : {
+        "name" : "Ride · 18 Nov 2026 (2)"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [
+          "Ride · 18 Nov 2026"
+        ],
+        "input" : "",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "empty and taken gets a counter"
+    },
+    {
+      "expected" : {
+        "name" : "Ride to Mysuru · 18 Nov 2026 (2)"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [
+          "Ride to Mysuru · 18 Nov 2026"
+        ],
+        "input" : "Ride to Mysuru · 18 Nov 2026",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "already dated isn't dated twice"
+    },
+    {
+      "expected" : {
+        "name" : "Day 1-3"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [],
+        "input" : "Day 1/3",
+        "locale" : "en_IN",
+        "startedAt" : 1794972600,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "slash becomes a dash"
+    },
+    {
+      "expected" : {
+        "name" : "Ride · 19 Nov 2026"
+      },
+      "input" : {
+        "call" : "resolve",
+        "existingNames" : [],
+        "input" : "",
+        "locale" : "en_IN",
+        "startedAt" : 1795032000,
+        "timeZone" : "Asia/Kolkata"
+      },
+      "name" : "rider's time zone decides the day"
+    },
+    {
+      "expected" : {
+        "suggestions" : [
+          "Nandi Hills",
+          "Hill top",
+          "Kudremukh hill"
+        ]
+      },
+      "input" : {
+        "call" : "suggest",
+        "input" : "hill",
+        "locale" : "en_IN",
+        "recentRideNames" : [
+          "Nandi Hills",
+          "Skandagiri",
+          "Hill top",
+          ""
+        ],
+        "timeZone" : "Asia/Kolkata",
+        "wishlistSpotNames" : [
+          "nandi hills",
+          "Kudremukh hill",
+          "Hill"
+        ]
+      },
+      "name" : "suggestions filter and dedupe"
+    },
+    {
+      "expected" : {
+        "suggestions" : [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ]
+      },
+      "input" : {
+        "call" : "suggest",
+        "input" : "",
+        "locale" : "en_IN",
+        "recentRideNames" : [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "timeZone" : "Asia/Kolkata",
+        "wishlistSpotNames" : [
+          "E",
+          "F",
+          "G"
+        ]
+      },
+      "name" : "suggestions skip the exact query and stop at 6"
+    },
+    {
+      "expected" : {
+        "suggestions" : [
+          "Skandagiri sunrise"
+        ]
+      },
+      "input" : {
+        "call" : "suggest",
+        "input" : "Skandagiri",
+        "locale" : "en_IN",
+        "recentRideNames" : [
+          "Skandagiri",
+          "Skandagiri sunrise"
+        ],
+        "timeZone" : "Asia/Kolkata",
+        "wishlistSpotNames" : []
+      },
+      "name" : "exact query left out"
+    }
+  ]
+}

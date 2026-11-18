@@ -58,8 +58,9 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
       golden file `spec/fixtures/track-v2.bin`). iOS reads v1, writes v2, upgrades v1 before upload.
 - [ ] Shared tracks friends already published are still v1: republish them as v2 (part of the
       server-side publishing below, or a one-off republish on iOS).
-- [ ] `spec/fixtures` for TrailBuilder, WishlistMatcher, RideTimePlan, WeatherAlerts, FamousPlaces,
-      SharePrivacy, RideNaming; Swift tests read them.
+- [x] `spec/fixtures` for Trail, WishlistMatcher (+ StopDetector, RevisitDetector), RideTimePlan (+ RidePace,
+      Sun), WeatherAlerts, FamousPlaces, SharePrivacy, RideNaming; Swift tests check them on every run
+      ([how they work](spec/fixtures/README.md)).
 - [ ] Migration: `media_links.platform` (`ios` | `android`) + `device_id`. Each phone resolves only its own media.
 - [ ] Migration: `app_config` table (`min_version` per platform) + forced-upgrade screen on iOS.
 - [ ] Server-side shared-ride publishing (`publish_shared_ride`): trimming happens in the backend.

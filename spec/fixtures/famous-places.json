@@ -1,0 +1,251 @@
+{
+  "about" : "FamousPlaces.ahead: ≥ 500 reviews and ≥ 4.0, ≤ 2 km, not already announced (key = id, else \"name@lat,lon\"), not within 150 m of a saved spot, not more than 90° off the course (unless within 150 m or the course is unknown), nearest 3. Also heading(of:) (GPS course when ≥ 3 m/s, else bearing over the last 50 m) and needsSearch (first search, or ≥ 3 km since the last).",
+  "cases" : [
+    {
+      "expected" : {
+        "ahead" : [
+          {
+            "distance" : 99.99773565404874,
+            "key" : "close-behind"
+          },
+          {
+            "distance" : 999.9995955560562,
+            "key" : "north-1k"
+          },
+          {
+            "distance" : 1500.0120032220238,
+            "key" : "Lake@12.981139,77.604389"
+          }
+        ],
+        "heading" : 0,
+        "needsSearch" : false
+      },
+      "input" : {
+        "alreadyAnnounced" : [
+          "announced"
+        ],
+        "candidates" : [
+          {
+            "at" : {
+              "lat" : 12.9805932,
+              "lon" : 77.5946
+            },
+            "id" : "north-1k",
+            "name" : "Fort",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9626068,
+              "lon" : 77.5946
+            },
+            "id" : "south-1k",
+            "name" : "Behind",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9707007,
+              "lon" : 77.5946
+            },
+            "id" : "close-behind",
+            "name" : "Gate",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9760966,
+              "lon" : 77.5946
+            },
+            "id" : "low-rating",
+            "name" : "Meh",
+            "rating" : 3.9,
+            "ratingCount" : 900
+          },
+          {
+            "at" : {
+              "lat" : 12.9760966,
+              "lon" : 77.5946
+            },
+            "id" : "few-reviews",
+            "name" : "New",
+            "rating" : 4.5,
+            "ratingCount" : 499
+          },
+          {
+            "at" : {
+              "lat" : 12.994083,
+              "lon" : 77.5946
+            },
+            "id" : "too-far",
+            "name" : "Far",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9778952,
+              "lon" : 77.5946
+            },
+            "id" : "announced",
+            "name" : "Old news",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9822279,
+              "lon" : 77.5965231
+            },
+            "id" : "saved",
+            "name" : "Mine",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9805932,
+              "lon" : 77.5946
+            },
+            "id" : "north-1k",
+            "name" : "Fort again",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9811387,
+              "lon" : 77.6043889
+            },
+            "name" : "Lake",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9875418,
+              "lon" : 77.5917152
+            },
+            "id" : "north-1800",
+            "name" : "Temple",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          }
+        ],
+        "course" : 0,
+        "lastSearch" : {
+          "lat" : 12.94551970945199,
+          "lon" : 77.5946
+        },
+        "position" : {
+          "lat" : 12.9716,
+          "lon" : 77.5946
+        },
+        "recentTrack" : [
+          [1794978000, 12.968902, 77.5946, null, 10, null, 5, null],
+          [1794978005, 12.9693517, 77.5946, null, 10, null, 5, null],
+          [1794978010, 12.9698014, 77.5946, null, 10, null, 5, null],
+          [1794978015, 12.9702511, 77.5946, null, 10, null, 5, null],
+          [1794978020, 12.9707008, 77.5946, null, 10, null, 5, null],
+          [1794978025, 12.9711505, 77.5946, null, 10, null, 5, null],
+          [1794978030, 12.9716002, 77.5946, null, 10, null, 5, null]
+        ],
+        "savedSpots" : [
+          {
+            "lat" : 12.9822279,
+            "lon" : 77.5965231
+          }
+        ]
+      },
+      "name" : "filters and keeps the nearest three"
+    },
+    {
+      "expected" : {
+        "ahead" : [
+          {
+            "distance" : 999.9995955564099,
+            "key" : "south-1k"
+          },
+          {
+            "distance" : 1500.0120032220238,
+            "key" : "Lake@12.981139,77.604389"
+          }
+        ],
+        "needsSearch" : true
+      },
+      "input" : {
+        "alreadyAnnounced" : [],
+        "candidates" : [
+          {
+            "at" : {
+              "lat" : 12.9626068,
+              "lon" : 77.5946
+            },
+            "id" : "south-1k",
+            "name" : "Behind",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          },
+          {
+            "at" : {
+              "lat" : 12.9811387,
+              "lon" : 77.6043889
+            },
+            "name" : "Lake",
+            "rating" : 4.5,
+            "ratingCount" : 2000
+          }
+        ],
+        "position" : {
+          "lat" : 12.9716,
+          "lon" : 77.5946
+        },
+        "recentTrack" : [
+          [1794978000, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978005, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978010, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978015, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978020, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978025, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978030, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978035, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978040, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978045, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978050, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978055, 12.9716, 77.5946, null, 0, null, 5, null],
+          [1794978060, 12.9716, 77.5946, null, 0, null, 5, null]
+        ],
+        "savedSpots" : []
+      },
+      "name" : "unknown course: nothing is behind"
+    },
+    {
+      "expected" : {
+        "ahead" : [],
+        "heading" : 87.5,
+        "needsSearch" : true
+      },
+      "input" : {
+        "alreadyAnnounced" : [],
+        "candidates" : [],
+        "course" : 90,
+        "lastSearch" : {
+          "lat" : 12.9716,
+          "lon" : 77.56599100867344
+        },
+        "position" : {
+          "lat" : 12.9716,
+          "lon" : 77.5946
+        },
+        "recentTrack" : [
+          [1794978000, 12.9716, 77.5946, null, 8, 87.5, 5, null]
+        ],
+        "savedSpots" : []
+      },
+      "name" : "moved 3 km: search again"
+    }
+  ]
+}

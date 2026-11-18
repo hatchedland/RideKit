@@ -1,0 +1,214 @@
+{
+  "about" : "RidePace.learn(rides) + RideTimePlan(departure, distance, roadSeconds, destination, pace), including Sun.sunset at the destination. Pace: rides ≥ 20 km and ≥ 20 min moving, newest 20, needs 2; speed distance-weighted, stop share = median clamped to 0.05…0.45; default 15 %. Moving time = average of Google and personal, never below Google, at most 1.6× Google. No sunset over 14 h or in polar night.",
+  "cases" : [
+    {
+      "expected" : {
+        "arrival" : 1794985305.8823528,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 1905.8823529411766,
+        "canStillArriveInDaylight" : true,
+        "latestDeparture" : 1794990790.5726967,
+        "movingSeconds" : 10800,
+        "rideCount" : 0,
+        "stopShare" : 0.15,
+        "sunset" : 1795004696.4550495
+      },
+      "input" : {
+        "departure" : 1794972600,
+        "destination" : {
+          "lat" : 12.2958,
+          "lon" : 76.6394
+        },
+        "distance" : 145000,
+        "rides" : [],
+        "roadSeconds" : 10800
+      },
+      "name" : "no history: Google time + 15 % stops"
+    },
+    {
+      "expected" : {
+        "arrival" : 1794985305.8823528,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 1905.8823529411766,
+        "canStillArriveInDaylight" : true,
+        "latestDeparture" : 1794990790.5726967,
+        "movingSeconds" : 10800,
+        "rideCount" : 0,
+        "stopShare" : 0.15,
+        "sunset" : 1795004696.4550495
+      },
+      "input" : {
+        "departure" : 1794972600,
+        "destination" : {
+          "lat" : 12.2958,
+          "lon" : 76.6394
+        },
+        "distance" : 145000,
+        "rides" : [
+          {
+            "distance" : 80000,
+            "elapsed" : 9000,
+            "moving" : 7200
+          },
+          {
+            "distance" : 15000,
+            "elapsed" : 2000,
+            "moving" : 1800
+          }
+        ],
+        "roadSeconds" : 10800
+      },
+      "name" : "one usable ride is not enough"
+    },
+    {
+      "expected" : {
+        "arrival" : 1794986826.5625,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 2845.312499999999,
+        "canStillArriveInDaylight" : true,
+        "latestDeparture" : 1794989269.8925495,
+        "movingSeconds" : 11381.25,
+        "paceSpeed" : 12.121212121212121,
+        "rideCount" : 3,
+        "stopShare" : 0.19999999999999996,
+        "sunset" : 1795004696.4550495
+      },
+      "input" : {
+        "departure" : 1794972600,
+        "destination" : {
+          "lat" : 12.2958,
+          "lon" : 76.6394
+        },
+        "distance" : 145000,
+        "rides" : [
+          {
+            "distance" : 80000,
+            "elapsed" : 9000,
+            "moving" : 7200
+          },
+          {
+            "distance" : 120000,
+            "elapsed" : 13000,
+            "moving" : 9600
+          },
+          {
+            "distance" : 40000,
+            "elapsed" : 3100,
+            "moving" : 3000
+          },
+          {
+            "distance" : 30000,
+            "elapsed" : 1200,
+            "moving" : 1000
+          }
+        ],
+        "roadSeconds" : 10800
+      },
+      "name" : "learned pace, slower than Google"
+    },
+    {
+      "expected" : {
+        "arrival" : 1794995640,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 5760,
+        "canStillArriveInDaylight" : true,
+        "latestDeparture" : 1794980456.4550495,
+        "movingSeconds" : 17280,
+        "paceSpeed" : 4.2727272727272725,
+        "rideCount" : 2,
+        "stopShare" : 0.25,
+        "sunset" : 1795004696.4550495
+      },
+      "input" : {
+        "departure" : 1794972600,
+        "destination" : {
+          "lat" : 12.2958,
+          "lon" : 76.6394
+        },
+        "distance" : 145000,
+        "rides" : [
+          {
+            "distance" : 25000,
+            "elapsed" : 20000,
+            "moving" : 6000
+          },
+          {
+            "distance" : 22000,
+            "elapsed" : 5100,
+            "moving" : 5000
+          }
+        ],
+        "roadSeconds" : 10800
+      },
+      "name" : "very slow rider capped at 1.6× Google"
+    },
+    {
+      "expected" : {
+        "arrival" : 1795010505.8823528,
+        "arrivesAfterDark" : true,
+        "breakSeconds" : 1905.8823529411766,
+        "canStillArriveInDaylight" : false,
+        "latestDeparture" : 1794990790.5726967,
+        "movingSeconds" : 10800,
+        "rideCount" : 0,
+        "stopShare" : 0.15,
+        "sunset" : 1795004696.4550495
+      },
+      "input" : {
+        "departure" : 1794997800,
+        "destination" : {
+          "lat" : 12.2958,
+          "lon" : 76.6394
+        },
+        "distance" : 145000,
+        "rides" : [],
+        "roadSeconds" : 10800
+      },
+      "name" : "late start arrives after dark"
+    },
+    {
+      "expected" : {
+        "arrival" : 1795027129.4117646,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 9529.411764705883,
+        "canStillArriveInDaylight" : true,
+        "movingSeconds" : 54000,
+        "rideCount" : 0,
+        "stopShare" : 0.15
+      },
+      "input" : {
+        "departure" : 1794963600,
+        "destination" : {
+          "lat" : 18.5204,
+          "lon" : 73.8567
+        },
+        "distance" : 900000,
+        "rides" : [],
+        "roadSeconds" : 54000
+      },
+      "name" : "longer than a day's ride: no sunset"
+    },
+    {
+      "expected" : {
+        "arrival" : 1797328023.5294118,
+        "arrivesAfterDark" : false,
+        "breakSeconds" : 423.5294117647059,
+        "canStillArriveInDaylight" : true,
+        "movingSeconds" : 2400,
+        "rideCount" : 0,
+        "stopShare" : 0.15
+      },
+      "input" : {
+        "departure" : 1797325200,
+        "destination" : {
+          "lat" : 69.6492,
+          "lon" : 18.9553
+        },
+        "distance" : 30000,
+        "rides" : [],
+        "roadSeconds" : 2400
+      },
+      "name" : "polar night: no sunset"
+    }
+  ]
+}

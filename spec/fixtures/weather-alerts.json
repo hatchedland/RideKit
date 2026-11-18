@@ -1,0 +1,274 @@
+{
+  "about" : "WeatherAlerts.next / .sunset run in order on one WeatherAlertState, plus .outlook. Priority storm > rain > wind (gust ≥ 40) > heat (feels ≥ 38) > clearing; rain only when it starts; same kind ≤ hourly; any alert ≤ every 15 min; looks 60 min ahead. Rainy = chance ≥ 60, or a wet condition (RAIN, SHOWER, THUNDER, HAIL, SLEET, SNOW) with ≥ 40. Stormy = thunder ≥ 50 or THUNDER/HAIL. Sunset: once, ≤ 30 min before, ≥ 5 km left.",
+  "cases" : [
+    {
+      "expected" : {
+        "alerts" : [
+          {
+            "at" : 1794994200,
+            "kind" : "rain",
+            "percent" : 80
+          },
+          null,
+          null,
+          {
+            "at" : 1795001400,
+            "kind" : "clearing"
+          },
+          null
+        ],
+        "outlook" : {
+          "at" : 1794994200,
+          "kind" : "rain",
+          "percent" : 80
+        }
+      },
+      "input" : {
+        "forecast" : [
+          {
+            "condition" : "CLEAR",
+            "rainChance" : 0,
+            "start" : 1794990600,
+            "thunderChance" : 0
+          },
+          {
+            "condition" : "RAIN",
+            "rainChance" : 80,
+            "start" : 1794994200,
+            "thunderChance" : 0
+          },
+          {
+            "condition" : "LIGHT_RAIN",
+            "rainChance" : 70,
+            "start" : 1794997800,
+            "thunderChance" : 0
+          },
+          {
+            "condition" : "CLOUDY",
+            "rainChance" : 10,
+            "start" : 1795001400,
+            "thunderChance" : 0
+          }
+        ],
+        "steps" : [
+          {
+            "call" : "next",
+            "now" : 1794992400
+          },
+          {
+            "call" : "next",
+            "now" : 1794993000
+          },
+          {
+            "call" : "next",
+            "now" : 1794996000
+          },
+          {
+            "call" : "next",
+            "now" : 1794999600
+          },
+          {
+            "call" : "next",
+            "now" : 1795003200
+          }
+        ]
+      },
+      "name" : "rain starts, eases, then quiet"
+    },
+    {
+      "expected" : {
+        "alerts" : [
+          {
+            "kind" : "storm",
+            "percent" : 70
+          },
+          null,
+          {
+            "kind" : "wind",
+            "value" : 55
+          }
+        ],
+        "outlook" : {
+          "kind" : "storm",
+          "percent" : 70
+        }
+      },
+      "input" : {
+        "forecast" : [
+          {
+            "condition" : "THUNDERSTORM",
+            "gustKmh" : 55,
+            "rainChance" : 70,
+            "start" : 1794992400,
+            "thunderChance" : 60
+          }
+        ],
+        "steps" : [
+          {
+            "call" : "next",
+            "now" : 1794992700
+          },
+          {
+            "call" : "next",
+            "now" : 1794993300
+          },
+          {
+            "call" : "next",
+            "now" : 1794993900
+          }
+        ]
+      },
+      "name" : "storm beats wind, wind next"
+    },
+    {
+      "expected" : {
+        "alerts" : [
+          {
+            "kind" : "heat",
+            "value" : 40.2
+          },
+          null,
+          {
+            "kind" : "heat",
+            "value" : 40.2
+          }
+        ],
+        "outlook" : {
+          "kind" : "heat",
+          "value" : 40.2
+        }
+      },
+      "input" : {
+        "forecast" : [
+          {
+            "condition" : "CLEAR",
+            "feelsLike" : 39.4,
+            "rainChance" : 0,
+            "start" : 1794985200,
+            "thunderChance" : 0
+          },
+          {
+            "condition" : "CLEAR",
+            "feelsLike" : 40.2,
+            "rainChance" : 0,
+            "start" : 1794988800,
+            "thunderChance" : 0
+          }
+        ],
+        "steps" : [
+          {
+            "call" : "next",
+            "now" : 1794985800
+          },
+          {
+            "call" : "next",
+            "now" : 1794987600
+          },
+          {
+            "call" : "next",
+            "now" : 1794989700
+          }
+        ]
+      },
+      "name" : "heat once an hour"
+    },
+    {
+      "expected" : {
+        "alerts" : [
+          null,
+          {
+            "at" : 1794988800,
+            "kind" : "rain",
+            "percent" : 45
+          }
+        ],
+        "outlook" : {
+          "at" : 1794988800,
+          "kind" : "rain",
+          "percent" : 45
+        }
+      },
+      "input" : {
+        "forecast" : [
+          {
+            "condition" : "CLOUDY",
+            "rainChance" : 55,
+            "start" : 1794985200,
+            "thunderChance" : 0
+          },
+          {
+            "condition" : "LIGHT_RAIN",
+            "rainChance" : 45,
+            "start" : 1794988800,
+            "thunderChance" : 0
+          }
+        ],
+        "steps" : [
+          {
+            "call" : "next",
+            "now" : 1794985200
+          },
+          {
+            "call" : "next",
+            "now" : 1794987000
+          }
+        ]
+      },
+      "name" : "wet condition counts from 40 %, cloudy doesn't"
+    },
+    {
+      "expected" : {
+        "alerts" : [
+          null,
+          {
+            "at" : 1795005600,
+            "kind" : "sunset",
+            "value" : 18000
+          },
+          null
+        ]
+      },
+      "input" : {
+        "forecast" : [],
+        "steps" : [
+          {
+            "call" : "sunset",
+            "now" : 1795003200,
+            "remaining" : 20000,
+            "sunset" : 1795005600
+          },
+          {
+            "call" : "sunset",
+            "now" : 1795004100,
+            "remaining" : 18000,
+            "sunset" : 1795005600
+          },
+          {
+            "call" : "sunset",
+            "now" : 1795005000,
+            "remaining" : 15000,
+            "sunset" : 1795005600
+          }
+        ]
+      },
+      "name" : "sunset once with 5 km to go"
+    },
+    {
+      "expected" : {
+        "alerts" : [null]
+      },
+      "input" : {
+        "forecast" : [],
+        "steps" : [
+          {
+            "call" : "sunset",
+            "now" : 1795004400,
+            "remaining" : 3000,
+            "sunset" : 1795005600
+          }
+        ]
+      },
+      "name" : "no sunset alert when nearly there"
+    }
+  ]
+}
