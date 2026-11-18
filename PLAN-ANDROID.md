@@ -62,8 +62,8 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 ### Phase 0 — groundwork on iOS + backend (before any Android code)
 - [x] **TrackCodec v2**: plain header + raw DEFLATE, Unix time ([spec/track-codec.md](spec/track-codec.md),
       golden file `spec/fixtures/track-v2.bin`). iOS reads v1, writes v2, upgrades v1 before upload.
-- [ ] Shared tracks friends already published are still v1: republish them as v2 (part of the
-      server-side publishing below, or a one-off republish on iOS).
+- [ ] Shared tracks friends already published are still v1: republish each shared ride once through
+      the function (it writes v2) after it's deployed.
 - [x] `spec/fixtures` for Trail, WishlistMatcher (+ StopDetector, RevisitDetector), RideTimePlan (+ RidePace,
       Sun), WeatherAlerts, FamousPlaces, SharePrivacy, RideNaming; Swift tests check them on every run
       ([how they work](spec/fixtures/README.md)).
@@ -74,7 +74,14 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 - [x] `app_config` (`min_version`, `store_url` per platform; migration 20261118100000, applied
       2026-11-18; readable signed out, owner-edited in SQL). iOS: RideKit `AppVersion`, update screen
       (never during a ride), and **sync stops** while the build is too old.
-- [ ] Server-side shared-ride publishing (`publish_shared_ride`): trimming happens in the backend.
+- [x] Server-side shared-ride publishing: Edge Function `publish-shared-ride` (trims with the account's
+      zones; photos via a private outbox), `privacy_zones` + `profiles.hide_ride_ends` (migration
+      20261118120000, zones now follow the rider to any phone), live-ride zone trigger. Logic in
+      `supabase/functions/_shared`, tested against `spec/fixtures` (`./scripts/test-functions.sh`).
+- [ ] **Lock-down, once every phone runs the build that publishes through the function** (raise
+      `app_config.min_version` first): revoke `insert, update` on `shared_rides` / `shared_media` from
+      `authenticated`, and let riders only *delete* in the `shared` bucket. Then the app can't skip the
+      server's trimming.
 - [ ] Android Google API key (package + SHA-1 restricted; Maps SDK, Places, Routes, Weather).
 - [ ] Repo move to `apps/ios`, `apps/android`, `backend/supabase` (one PR, scripts + CLAUDE.md updated).
 

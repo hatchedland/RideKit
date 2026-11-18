@@ -105,7 +105,12 @@ Setup and release checklist: [README.md](README.md).
   songs, **only photos the rider picked** — never the rider's own tables, and can follow a ride
   **live** (`live_rides`, ~1 update/min, chosen on the Start sheet, ends at End or after 12 h). The
   **first and last 500 m** of every shared ride and everything in **privacy zones** are never shared,
-  live included; the destination never is. Shared photos are the one exception to "never copied":
+  live included; the destination never is. **The server does the trimming (2026-11-18)**: the
+  `publish-shared-ride` Edge Function reads the full track from the rider's Storage and the zones from
+  `privacy_zones` / `profiles.hide_ride_ends` (kept in the account, so every phone has them), and writes
+  the shared track, row and photos. Apps upload picked photos to a private outbox
+  (`tracks/<uid>/outbox/<ride>/`) and call it; a trigger keeps live positions out of zones. Its logic
+  (`supabase/functions/_shared`) must pass `./scripts/test-functions.sh` against `spec/fixtures`. Shared photos are the one exception to "never copied":
   2048 px JPEG copies of the chosen photos only. Nothing social on the riding screen beyond a passive
   "Live" chip; no comments or likes. Every friend's stop has **Add to my wishlist** — that's the point
   of the feature. Works in every build.
