@@ -175,32 +175,41 @@ struct FriendsBackend: Sendable {
 
     // MARK: Publishing your rides
 
-    /// Publishes (or republishes) a ride: the trimmed track, the picked photos as JPEG files, and the
-    /// row friends read. `photoFiles` is keyed by `SharedRide.Photo.id` (the `MediaLink` id).
-    func publish(_ ride: SharedRide, track: [TrackPoint], photoFiles: [String: URL]) async throws {
+    enum PublishError: Error, Equatable {
+        /// The ride or its track isn't in the account yet (or still in the old format): sync, then retry.
+        case needsSync
+    }
+
+    /// Publishes (or republishes) a ride through the `publish-shared-ride` Edge Function, which trims
+    /// it with the privacy zones in the rider's account and writes what friends see. The picked photos
+    /// (JPEG files keyed by `SharedRide.Photo.id`) go to a private outbox first, which friends can't
+    /// read; the function moves only the allowed ones across.
+    func publish(_ ride: SharedRide, photoFiles: [String: URL]) async throws {
         let me = try await me()
-        let folder = "\(me.uuidString.lowercased())/\(ride.id.uuidString.lowercased())"
-        let storage = client.storage.from("shared")
-
-        try await storage.upload("\(folder)/track", data: TrackCodec.encode(track),
-                                 options: FileOptions(contentType: "application/octet-stream", upsert: true))
-        try await client.from("shared_rides").upsert(SharedRideRow(ride, ownerID: me, trackPath: "\(folder)/track"),
-                                                     onConflict: "ride_id", returning: .minimal).execute()
-
-        // Photos: replace the set, so un-picked ones disappear for friends.
-        try await client.from("shared_media").delete().eq("ride_id", value: ride.id).execute()
-        var rows: [SharedMediaRow] = []
-        for photo in ride.photos {
-            guard let file = photoFiles[photo.id], let id = UUID(uuidString: photo.id) else { continue }
-            let path = "\(folder)/photos/\(id.uuidString.lowercased()).jpg"
-            try await storage.upload(path, fileURL: file, options: FileOptions(contentType: "image/jpeg", upsert: true))
-            rows.append(SharedMediaRow(photo, rideID: ride.id, ownerID: me, path: path,
-                                       stopID: ride.stops.first { $0.photoIDs.contains(photo.id) }?.id))
+        let outbox = "\(me.uuidString.lowercased())/outbox/\(ride.id.uuidString.lowercased())"
+        for (id, file) in photoFiles {
+            try await client.storage.from("tracks").upload("\(outbox)/\(id.lowercased()).jpg", fileURL: file,
+                                                           options: FileOptions(contentType: "image/jpeg", upsert: true))
         }
-        if !rows.isEmpty {
-            try await client.from("shared_media").insert(rows, returning: .minimal).execute()
+        do {
+            try await client.functions.invoke("publish-shared-ride",
+                                              options: FunctionInvokeOptions(body: PublishBody(ride: ride), encoder: Self.functionEncoder))
+        } catch FunctionsError.httpError(let code, _) where code == 409 || code == 404 {
+            throw PublishError.needsSync
         }
     }
+
+    private struct PublishBody: Encodable { var ride: SharedRide }
+
+    /// Dates as PostgREST writes them, because the function stores stops and songs as given.
+    static let functionEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+        }
+        return encoder
+    }()
 
     func unpublish(rideID: UUID) async throws {
         let me = try await me()
@@ -208,6 +217,32 @@ struct FriendsBackend: Sendable {
         try await client.from("shared_rides").delete().eq("ride_id", value: rideID).execute()
         let photos = (try? await client.storage.from("shared").list(path: "\(folder)/photos")) ?? []
         _ = try? await client.storage.from("shared").remove(paths: ["\(folder)/track"] + photos.map { "\(folder)/photos/\($0.name)" })
+    }
+
+    // MARK: Privacy
+
+    /// Privacy zones and "hide the start and end" live in the account, so every phone (and the server,
+    /// which trims shared rides with them) has the same ones.
+    func loadPrivacy() async throws -> (zones: [PrivacyZone], hideRideEnds: Bool) {
+        let me = try await me()
+        let zones: [ZoneRow] = try await client.from("privacy_zones").select().order("created_at").execute().value
+        struct Profile: Decodable { var hide_ride_ends: Bool }
+        let profile: Profile = try await client.from("profiles").select("hide_ride_ends").eq("id", value: me).single().execute().value
+        return (zones.map(\.zone), profile.hide_ride_ends)
+    }
+
+    func savePrivacy(zones: [PrivacyZone], hideRideEnds: Bool) async throws {
+        let me = try await me()
+        try await client.from("profiles").update(["hide_ride_ends": hideRideEnds]).eq("id", value: me).execute()
+        if !zones.isEmpty {
+            try await client.from("privacy_zones").upsert(zones.map(ZoneRow.init), onConflict: "id", returning: .minimal).execute()
+        }
+        // Zones removed on this phone go from the account too.
+        var removal = client.from("privacy_zones").delete().eq("user_id", value: me)
+        if !zones.isEmpty {
+            removal = removal.not("id", operator: .in, value: "(\(zones.map { $0.id.uuidString.lowercased() }.joined(separator: ",")))")
+        }
+        try await removal.execute()
     }
 
     // MARK: Live
@@ -373,5 +408,30 @@ struct LiveRow: Codable, Sendable {
         LiveRide(rideID: rideID, rideName: rideName, startedAt: startedAt, updatedAt: updatedAt ?? startedAt,
                  position: Coordinate(latitude: latitude, longitude: longitude), distanceMeters: distanceMeters,
                  isPaused: isPaused, path: path)
+    }
+}
+
+struct ZoneRow: Codable, Sendable {
+    var id: UUID
+    var name: String
+    var latitude: Double
+    var longitude: Double
+    var radiusMeters: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, latitude, longitude
+        case radiusMeters = "radius_meters"
+    }
+
+    init(_ zone: PrivacyZone) {
+        id = zone.id
+        name = zone.name
+        latitude = zone.center.latitude
+        longitude = zone.center.longitude
+        radiusMeters = zone.radius
+    }
+
+    var zone: PrivacyZone {
+        PrivacyZone(id: id, name: name, center: Coordinate(latitude: latitude, longitude: longitude), radius: radiusMeters)
     }
 }

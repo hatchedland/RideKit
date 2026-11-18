@@ -107,6 +107,10 @@ final class SyncService {
         try? FileManager.default.removeItem(at: Self.stateURL)
         try? FileManager.default.removeItem(at: URL.cachesDirectory.appending(path: "friends"))
         try? FileManager.default.removeItem(at: URL.cachesDirectory.appending(path: "chat"))
+        // Privacy zones belong to the account: never carry one rider's home into another's.
+        AppSettings.privacyZones = []
+        AppSettings.hideRideEnds = true
+        AppSettings.privacyInAccount = false
         status = .idle
     }
 

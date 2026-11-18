@@ -16,6 +16,7 @@ struct FriendsSettingsSection: View {
                     .textContentType(.givenName)
                 Toggle("Share new rides with friends", isOn: $shareByDefault)
                 Toggle("Hide the start and end", isOn: $hideRideEnds)
+                    .onChange(of: hideRideEnds) { Task { await recorder.friends.savePrivacy() } }
                 NavigationLink {
                     PrivacyZonesView()
                 } label: {
@@ -24,7 +25,7 @@ struct FriendsSettingsSection: View {
             } header: {
                 Text("Friends")
             } footer: {
-                Text("Only friends you invite see rides you share. “Hide the start and end” cuts the first and last 500 m of every shared ride; privacy zones hide everything around places like home and work, also when riding live.")
+                Text("Only friends you invite see rides you share. “Hide the start and end” cuts the first and last 500 m of every shared ride; privacy zones hide everything around places like home and work, also when riding live. Both are kept in your account, so they apply on every phone.")
             }
         }
     }
@@ -32,6 +33,7 @@ struct FriendsSettingsSection: View {
 
 /// Places friends never see: the route, stops and photos inside are left out of everything shared.
 struct PrivacyZonesView: View {
+    @Environment(RideRecorder.self) private var recorder
     @State private var zones = AppSettings.privacyZones
     @State private var adding = false
     @State private var name = "Home"
@@ -51,6 +53,7 @@ struct PrivacyZonesView: View {
                 .onDelete { offsets in
                     zones.remove(atOffsets: offsets)
                     AppSettings.privacyZones = zones
+                    Task { await recorder.friends.savePrivacy() }
                 }
                 Button("Add current location", systemImage: "location") {
                     name = zones.isEmpty ? "Home" : zones.count == 1 ? "Work" : ""
@@ -88,6 +91,7 @@ struct PrivacyZonesView: View {
                                        center: Coordinate(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude))
                 zones.append(zone)
                 AppSettings.privacyZones = zones
+                await recorder.friends.savePrivacy()
                 return
             }
         } catch {

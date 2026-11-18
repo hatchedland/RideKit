@@ -16,6 +16,8 @@ enum AppSettings {
         static let shareRidesByDefault = "settings.friends.shareRidesByDefault"
         static let hideRideEnds = "settings.friends.hideRideEnds"
         static let privacyZones = "settings.friends.privacyZones"
+        /// This phone's zones have been saved to the account at least once; from then on the account wins.
+        static let privacyInAccount = "settings.friends.privacyInAccount"
     }
 
     /// Always kilometres and km/h: riders here think in km (decided 2026-11-16, no setting).
@@ -63,7 +65,13 @@ enum AppSettings {
 
     /// Cut the first and last 500 m of every shared ride. On by default.
     static var hideRideEnds: Bool {
-        defaults.object(forKey: Key.hideRideEnds) as? Bool ?? true
+        get { defaults.object(forKey: Key.hideRideEnds) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.hideRideEnds) }
+    }
+
+    static var privacyInAccount: Bool {
+        get { defaults.bool(forKey: Key.privacyInAccount) }
+        set { defaults.set(newValue, forKey: Key.privacyInAccount) }
     }
 
     static var privacyZones: [PrivacyZone] {

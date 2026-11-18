@@ -65,6 +65,7 @@ final class FriendsService {
         if !isRidingLive { try? await backend.endLive() }
         let name = AppSettings.riderName
         if !name.isEmpty { try? await backend.setDisplayName(name) }
+        await syncPrivacy()
         await refresh()
     }
 
@@ -148,33 +149,73 @@ final class FriendsService {
 
     // MARK: Sharing rides
 
-    /// Publishes the ride for friends, with the photos marked `sharedWithFriends`, after removing
-    /// everything inside privacy zones and near the ride's start and end.
+    /// Publishes the ride for friends, with the photos marked `sharedWithFriends`. The server trims it
+    /// (privacy zones, the start and end) with the settings in the rider's account, so every app
+    /// shares the same way; the phone only skips uploading photos that would be trimmed anyway.
     func publish(_ ride: Ride) async {
         if availability != .available { await checkAvailability() }
         guard availability == .available, let backend else { return }
-        // The published copy must point at a ride that's already in the rider's account.
+        // The function reads the ride and its track from the account, so they must be there first.
         await sync?.sync()
-        let privacy = AppSettings.sharePrivacy
         let fullTrack = ride.decodedTrack()
-        let shared = Self.sharedRide(from: ride, track: fullTrack).redacted(by: privacy, track: fullTrack)
+        var shared = Self.sharedRide(from: ride, track: fullTrack)
+        let wouldShare = Set(shared.redacted(by: AppSettings.sharePrivacy, track: fullTrack).photos.map(\.id))
         let localIDs = Dictionary((ride.media ?? []).map { ($0.id.uuidString, $0.localIdentifier) }, uniquingKeysWith: { a, _ in a })
-        let photoFiles = await Self.exportPhotos(shared.photos.compactMap { photo in localIDs[photo.id].map { (photo.id, $0) } })
+        let photoFiles = await Self.exportPhotos(shared.photos.filter { wouldShare.contains($0.id) }
+            .compactMap { photo in localIDs[photo.id].map { (photo.id, $0) } })
+        defer { for url in photoFiles.values { try? FileManager.default.removeItem(at: url) } }
         // Photos that couldn't be exported (deleted, iCloud offline) are left out.
-        var final = shared
-        final.photos = shared.photos.filter { photoFiles[$0.id] != nil }
-        let photoIDs = Set(final.photos.map(\.id))
-        final.stops = final.stops.map { var stop = $0; stop.photoIDs.removeAll { !photoIDs.contains($0) }; return stop }
+        shared.photos = shared.photos.filter { photoFiles[$0.id] != nil }
+        let photoIDs = Set(shared.photos.map(\.id))
+        shared.stops = shared.stops.map { var stop = $0; stop.photoIDs.removeAll { !photoIDs.contains($0) }; return stop }
 
         do {
-            try await backend.publish(final, track: privacy.redact(fullTrack), photoFiles: photoFiles)
+            do {
+                try await backend.publish(shared, photoFiles: photoFiles)
+            } catch FriendsBackend.PublishError.needsSync {
+                // The track wasn't uploaded yet (or was in the old format): sync once more and retry.
+                await sync?.sync()
+                try await backend.publish(shared, photoFiles: photoFiles)
+            }
             ride.sharedWithFriends = true
             ride.sharedAt = .now
             lastError = nil
+        } catch FriendsBackend.PublishError.needsSync {
+            lastError = "This ride hasn't reached your account yet. It will share once it has synced."
         } catch {
             lastError = Self.message(for: error)
         }
-        for url in photoFiles.values { try? FileManager.default.removeItem(at: url) }
+    }
+
+    // MARK: Privacy
+
+    /// Brings the account's privacy settings to this phone. The first time (zones made before they
+    /// lived in the account) this phone's settings go up instead.
+    func syncPrivacy() async {
+        guard availability == .available, let backend else { return }
+        do {
+            if AppSettings.privacyInAccount {
+                let remote = try await backend.loadPrivacy()
+                AppSettings.privacyZones = remote.zones
+                AppSettings.hideRideEnds = remote.hideRideEnds
+            } else {
+                try await backend.savePrivacy(zones: AppSettings.privacyZones, hideRideEnds: AppSettings.hideRideEnds)
+                AppSettings.privacyInAccount = true
+            }
+        } catch {
+            lastError = Self.message(for: error)
+        }
+    }
+
+    /// Saves a change made in Settings to the account (where the server reads it when sharing).
+    func savePrivacy() async {
+        guard availability == .available, let backend else { return }
+        do {
+            try await backend.savePrivacy(zones: AppSettings.privacyZones, hideRideEnds: AppSettings.hideRideEnds)
+            AppSettings.privacyInAccount = true
+        } catch {
+            lastError = Self.message(for: error)
+        }
     }
 
     func unpublish(_ ride: Ride) async {
