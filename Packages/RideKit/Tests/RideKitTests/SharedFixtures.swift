@@ -633,4 +633,60 @@ struct SharedFixtureTests {
             ("unreadable minimum never blocks", VersionInput(current: "1.0.0", minimum: "latest")),
         ], run: { AppVersion.needsUpdate(current: $0.current, minimum: $0.minimum) })
     }
+    // MARK: Shared ride redaction
+
+    struct RedactionInput: Codable {
+        struct Stop: Codable { var id: String; var at: LatLon; var photoIDs: [String] }
+        struct Photo: Codable { var id: String; var at: LatLon? }
+        var zones: [PrivacyInput.Zone]
+        var endTrim: Double
+        var track: [JPoint]
+        var stops: [Stop]
+        var photos: [Photo]
+    }
+    struct RedactionOutput: Codable, Equatable {
+        struct Photo: Codable, Equatable { var id: String; var at: LatLon? }
+        /// Ids of the stops friends may see, in order.
+        var stops: [String]
+        var photos: [Photo]
+    }
+
+    @Test func sharedRideRedaction() throws {
+        try SharedFixture.verify("shared-ride-redaction", about: """
+            SharedRide.redacted(by: privacy, track:): stops that SharePrivacy.shows() rejects are dropped with \
+            every photo taken at them; other photos lose their location if it isn't shown. Order is kept. Runs \
+            on the server (supabase/functions/_shared/privacy.ts) since 2026-11-18.
+            """, cases: {
+            let ride = Build.track(start: Build.t("2026-11-18T03:30:00Z"), legs: [(600, 9.7, 0)])
+            let home = Build.at(ride, 0), mid = Build.at(ride, 300), end = Build.at(ride, 600)
+            let cafe = Build.at(ride, 200), office = Build.move(mid, meters: 40, bearing: 90)
+            let stops: [RedactionInput.Stop] = [
+                .init(id: "at-home", at: LatLon(home), photoIDs: ["p-home"]),
+                .init(id: "cafe", at: LatLon(cafe), photoIDs: ["p-cafe", "p-cafe-2"]),
+                .init(id: "office", at: LatLon(office), photoIDs: ["p-office"]),
+                .init(id: "at-end", at: LatLon(end), photoIDs: []),
+            ]
+            let photos: [RedactionInput.Photo] = [
+                .init(id: "p-home", at: LatLon(home)), .init(id: "p-cafe", at: LatLon(cafe)),
+                .init(id: "p-cafe-2", at: nil), .init(id: "p-office", at: LatLon(office)),
+                .init(id: "p-road-near-end", at: LatLon(Build.at(ride, 590))), .init(id: "p-road", at: LatLon(Build.at(ride, 400))),
+            ]
+            return [
+                ("ends and a zone", RedactionInput(zones: [.init(center: LatLon(mid), radius: 300)], endTrim: 500,
+                                                   track: ride, stops: stops, photos: photos)),
+                ("everything off", RedactionInput(zones: [], endTrim: 0, track: ride, stops: stops, photos: photos)),
+            ]
+        }, run: { input in
+            let privacy = SharePrivacy(zones: input.zones.map { PrivacyZone(name: "z", center: $0.center.coordinate, radius: $0.radius) },
+                                       endTrim: input.endTrim)
+            let t0 = input.track.first?.point.timestamp ?? .now
+            let ride = SharedRide(
+                id: UUID(), name: "r", startedAt: t0, endedAt: t0,
+                stops: input.stops.map { SharedRide.Stop(id: $0.id, name: "", category: "", coordinate: $0.at.coordinate, arrivedAt: t0, photoIDs: $0.photoIDs) },
+                photos: input.photos.map { SharedRide.Photo(id: $0.id, capturedAt: t0, coordinate: $0.at?.coordinate) })
+            let redacted = ride.redacted(by: privacy, track: input.track.points)
+            return RedactionOutput(stops: redacted.stops.map(\.id),
+                                   photos: redacted.photos.map { .init(id: $0.id, at: $0.coordinate.map(LatLon.init)) })
+        })
+    }
 }
