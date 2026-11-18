@@ -77,7 +77,8 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
 - [x] Server-side shared-ride publishing: Edge Function `publish-shared-ride` (trims with the account's
       zones; photos via a private outbox), `privacy_zones` + `profiles.hide_ride_ends` (migration
       20261118120000, zones now follow the rider to any phone), live-ride zone trigger. Logic in
-      `supabase/functions/_shared`, tested against `spec/fixtures` (`./scripts/test-functions.sh`).
+      `supabase/functions/_shared`, tested against `spec/fixtures` (`./scripts/test-functions.sh`); deployed 2026-11-18
+      (`supabase functions deploy publish-shared-ride --use-api`).
 - [ ] **Lock-down, once every phone runs the build that publishes through the function** (raise
       `app_config.min_version` first): revoke `insert, update` on `shared_rides` / `shared_media` from
       `authenticated`, and let riders only *delete* in the `shared` bucket. Then the app can't skip the
