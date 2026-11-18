@@ -1,3 +1,5 @@
+import AuthenticationServices
+import CryptoKit
 import Foundation
 import Observation
 import OSLog
@@ -6,10 +8,10 @@ import Supabase
 
 /// The rider's Ride Tracker account (Supabase Auth). Required: signed out, the app shows only sign-in.
 ///
-/// Sign-in is passwordless by email link: Supabase emails a link that opens
-/// `ridetracker://auth-callback` in this app, which finishes the sign-in. (A 6-digit code needs a
-/// custom email template, which free projects only get with their own SMTP sender; planned before
-/// the App Store release.) The session is kept in the Keychain by the SDK.
+/// Sign in with Apple (native sheet → ID token) or Google (Supabase OAuth in an in-app browser sheet,
+/// back through `ridetracker://auth-callback`). No email/password and no email links (decided
+/// 2026-11-18). An account with the same verified email is the same account whichever way the rider
+/// signs in. The session is kept in the Keychain by the SDK.
 @MainActor
 @Observable
 final class AccountService {
@@ -17,13 +19,14 @@ final class AccountService {
         /// At launch, until the saved session (if any) has been read.
         case checking
         case signedOut
-        /// The link is on its way to this address.
-        case linkSent(email: String, at: Date)
+        /// Apple may hide the address (private relay) — it's for display only.
         case signedIn(email: String)
     }
 
     private(set) var state: State = .checking
     private(set) var error: String?
+    /// A sign-in sheet is open or the token is being exchanged.
+    private(set) var isSigningIn = false
     /// The rider's name and @handle, once loaded after sign-in.
     private(set) var profile: Profile?
 
@@ -115,30 +118,88 @@ final class AccountService {
             if let email = session?.user.email {
                 state = .signedIn(email: email)
                 if profile == nil { await loadProfile() }
-            } else if case .linkSent = state {
-                // Still waiting for the rider to tap the link.
             } else {
                 state = .signedOut
             }
         }
     }
 
-    /// Emails a sign-in link. New riders get an account the first time they use it.
-    func sendLink(to input: String) async {
-        let email = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    // MARK: Sign in
+
+    /// Google, through Supabase's OAuth flow in an in-app browser sheet.
+    func signInWithGoogle() async {
         guard let client else { error = "Accounts aren't set up in this build."; return }
-        guard Self.looksLikeEmail(email) else { error = "That doesn't look like an email address."; return }
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        defer { isSigningIn = false }
         error = nil
         do {
-            try await client.auth.signInWithOTP(email: email, redirectTo: Self.redirectURL, shouldCreateUser: true)
-            state = .linkSent(email: email, at: .now)
+            let session = try await client.auth.signInWithOAuth(provider: .google, redirectTo: Self.redirectURL)
+            state = .signedIn(email: session.user.email ?? "")
+        } catch let failure as ASWebAuthenticationSessionError where failure.code == .canceledLogin {
+            // The rider closed the sheet.
         } catch {
-            Self.log.error("Sign-in link failed: \(error.localizedDescription, privacy: .public)")
+            Self.log.error("Google sign-in failed: \(error.localizedDescription, privacy: .public)")
             self.error = Self.message(for: error)
         }
     }
 
-    /// Handles `ridetracker://auth-callback…` from the email link. Returns whether it was ours.
+    /// A fresh nonce for one Sign in with Apple request: Apple gets its SHA-256, Supabase the original.
+    func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = Self.randomNonce()
+        appleNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = Self.sha256(nonce)
+    }
+
+    /// Finishes Sign in with Apple with the result of the system sheet.
+    func completeApple(_ result: Result<ASAuthorization, any Error>) async {
+        guard let client else { error = "Accounts aren't set up in this build."; return }
+        switch result {
+        case .failure(let failure):
+            if (failure as? ASAuthorizationError)?.code != .canceled {
+                Self.log.error("Apple sign-in failed: \(failure.localizedDescription, privacy: .public)")
+                error = "Sign in with Apple didn't work. Try again."
+            }
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
+                  let nonce = appleNonce else {
+                error = "Sign in with Apple didn't work. Try again."
+                return
+            }
+            isSigningIn = true
+            defer { isSigningIn = false; appleNonce = nil }
+            error = nil
+            do {
+                let session = try await client.auth.signInWithIdToken(credentials: .init(provider: .apple, idToken: token, nonce: nonce))
+                // Apple shares the name only the first time; it fills the name field of the @handle step.
+                if let name = credential.fullName.map({ PersonNameComponentsFormatter.localizedString(from: $0, style: .default) }),
+                   !name.isEmpty, AppSettings.riderName.isEmpty {
+                    AppSettings.riderName = name
+                }
+                state = .signedIn(email: session.user.email ?? "")
+            } catch {
+                Self.log.error("Apple token exchange failed: \(error.localizedDescription, privacy: .public)")
+                self.error = Self.message(for: error)
+            }
+        }
+    }
+
+    private var appleNonce: String?
+
+    nonisolated static func randomNonce(length: Int = 32) -> String {
+        let characters = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var generator = SystemRandomNumberGenerator()
+        return String((0..<length).map { _ in characters.randomElement(using: &generator)! })
+    }
+
+    nonisolated static func sha256(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Handles `ridetracker://auth-callback…` if the OAuth result arrives as a URL open rather than
+    /// inside the browser sheet. Returns whether it was ours.
     @discardableResult
     func handle(_ url: URL) async -> Bool {
         guard let client, url.scheme == Self.redirectURL.scheme, url.host() == Self.redirectURL.host() else { return false }
@@ -147,8 +208,8 @@ final class AccountService {
             state = .signedIn(email: session.user.email ?? "")
             error = nil
         } catch {
-            Self.log.error("Sign-in link didn't work: \(error.localizedDescription, privacy: .public)")
-            self.error = "That sign-in link has expired or was already used. Send a new one."
+            Self.log.error("Sign-in callback didn't work: \(error.localizedDescription, privacy: .public)")
+            self.error = "Sign-in didn't finish. Try again."
         }
         return true
     }
@@ -211,7 +272,7 @@ final class AccountService {
             }
             try await client.rpc("delete_my_account").execute()
         } catch {
-            return Self.message(for: error)
+            return (error as? URLError) != nil ? "No connection. Try again when you have signal." : "Couldn't delete your account. Try again."
         }
         try? await client.auth.signOut()
         profile = nil
@@ -238,27 +299,10 @@ final class AccountService {
         }
     }
 
-    /// Back to the email field, e.g. to fix a typo.
-    func startOver() {
-        state = .signedOut
-        error = nil
-    }
-
-    static func looksLikeEmail(_ text: String) -> Bool {
-        let parts = text.split(separator: "@", omittingEmptySubsequences: false)
-        guard parts.count == 2, !parts[0].isEmpty, parts[1].contains("."),
-              !parts[1].hasPrefix("."), !parts[1].hasSuffix("."), !text.contains(" ") else { return false }
-        return true
-    }
-
     private static func message(for error: any Error) -> String {
-        let text = error.localizedDescription.lowercased()
-        if text.contains("rate") || text.contains("security purposes") {
-            return "Too many sign-in emails just now. Wait a minute and try again."
-        }
         if (error as? URLError) != nil {
             return "No connection. Try again when you have signal."
         }
-        return "Couldn't send the sign-in email. Try again."
+        return "Couldn't sign in. Try again."
     }
 }

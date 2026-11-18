@@ -35,7 +35,7 @@ struct RootView: View {
         case .checking:
             // Reading the saved session; a blank asphalt screen, not a sign-in flash.
             Brand.page.ignoresSafeArea()
-        case .signedOut, .linkSent:
+        case .signedOut:
             SignInView()
         case .signedIn where account.needsHandle:
             HandleSetupView()

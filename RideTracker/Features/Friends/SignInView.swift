@@ -1,11 +1,11 @@
+import AuthenticationServices
 import SwiftUI
 
-/// The app's front door: every feature needs an account. Passwordless: an email link that opens the app.
+/// The app's front door: every feature needs an account. Sign in with Apple or Google; no email or
+/// password (decided 2026-11-18). Free Personal builds can't use Sign in with Apple, so they show Google only.
 struct SignInView: View {
     @Environment(AccountService.self) private var account
-    @State private var email = ""
-    @State private var sending = false
-    @FocusState private var emailFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView {
@@ -16,15 +16,37 @@ struct SignInView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Ride Tracker").font(.largeTitle.bold().width(.expanded))
-                    Text("Record your rides, save the spots you stop at, and ride with friends. Sign in with your email to start; no password.")
+                    Text("Record your rides, save the spots you stop at, and ride with friends.")
                         .foregroundStyle(.secondary)
                 }
 
-                switch account.state {
-                case .linkSent(let sentTo, let at):
-                    linkSent(to: sentTo, at: at)
-                default:
-                    emailForm
+                VStack(spacing: 12) {
+                    #if !PERSONAL_TEAM
+                    SignInWithAppleButton(.continue) { request in
+                        account.prepareAppleRequest(request)
+                    } onCompletion: { result in
+                        Task { await account.completeApple(result) }
+                    }
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(height: Self.buttonHeight)
+                    .clipShape(.rect(cornerRadius: 16))
+                    #endif
+
+                    Button {
+                        Task { await account.signInWithGoogle() }
+                    } label: {
+                        Text("Continue with Google")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(Color(hex: 0x1F1F1F))
+                            .frame(maxWidth: .infinity, minHeight: Self.buttonHeight)
+                            .background(.white, in: .rect(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(hex: 0x747775), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .disabled(account.isSigningIn || !account.isConfigured)
+                .overlay {
+                    if account.isSigningIn { ProgressView().controlSize(.large) }
                 }
 
                 if let error = account.error {
@@ -40,80 +62,7 @@ struct SignInView: View {
             .padding(24)
         }
         .background(Brand.page)
-        .scrollDismissesKeyboard(.interactively)
     }
 
-    private var emailForm: some View {
-        VStack(spacing: 12) {
-            TextField("Email", text: $email, prompt: Text("Your email address"))
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.send)
-                .focused($emailFocused)
-                .onSubmit(send)
-                .font(.title3)
-                .padding(.horizontal, 16)
-                .frame(minHeight: 56)
-                .background(Brand.card, in: .rect(cornerRadius: 16))
-
-            Button(action: send) {
-                HStack {
-                    if sending { ProgressView().tint(Brand.asphalt) }
-                    Text("Email me a sign-in link")
-                }
-                .font(.headline)
-                .foregroundStyle(Brand.asphalt)
-                .frame(maxWidth: .infinity, minHeight: 56)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Brand.highwayYellow)
-            .disabled(sending || !account.isConfigured || !AccountService.looksLikeEmail(email.trimmingCharacters(in: .whitespaces)))
-        }
-    }
-
-    private func linkSent(to address: String, at sentAt: Date) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Check your email").font(.headline)
-                    Text("We sent a sign-in link to \(address). Open it on this iPhone and tap the link.")
-                        .foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "envelope.badge").font(.title2).foregroundStyle(Brand.accent)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Brand.card, in: .rect(cornerRadius: 16))
-
-            // Supabase allows one email a minute; the button says so instead of failing.
-            TimelineView(.periodic(from: sentAt, by: 1)) { context in
-                let wait = max(0, 60 - Int(context.date.timeIntervalSince(sentAt)))
-                HStack {
-                    Button(wait > 0 ? "Send again in \(wait)s" : "Send again") {
-                        email = address
-                        send()
-                    }
-                    .disabled(wait > 0 || sending)
-                    Spacer()
-                    Button("Use a different email") {
-                        account.startOver()
-                        emailFocused = true
-                    }
-                }
-                .font(.subheadline)
-            }
-        }
-    }
-
-    private func send() {
-        guard !sending else { return }
-        sending = true
-        Task {
-            await account.sendLink(to: email)
-            sending = false
-        }
-    }
+    private static let buttonHeight: CGFloat = 56
 }
