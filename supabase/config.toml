@@ -382,3 +382,8 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# The function checks the caller itself (auth.getUser), so it works with the project's asymmetric
+# JWT signing keys; the gateway's legacy-secret check is off.
+[functions.publish-shared-ride]
+verify_jwt = false
