@@ -88,6 +88,11 @@ WorkManager (sync), DataStore, Maps SDK for Android (`maps-compose`), Fused Loca
       every command is unchanged. `android/` arrives with Phase 1.
 
 ### Phase 1 — Android MVP
+- [x] `android/` Gradle project (Gradle 9.9.1 wrapper with checksum, Kotlin 2.4.21, JUnit 6) and
+      **`ridekit`**: the Kotlin port of everything `spec/fixtures` covers (geometry, track codec, privacy,
+      stops/wishlist, pace/arrival/sunset, weather alerts, famous places, trail, naming, app version),
+      times as Unix seconds. `./scripts/test-android.sh` runs it against every golden file.
+- [ ] App module (Compose, Material 3 + Milestone tokens, Room, WorkManager, supabase-kt, Maps).
 Sign-in + @handle, Start ride → record (FGS) → Mark spot (button, notification, QS tile) → End,
 spots + map + drawer, rides list/detail, offline-first sync.
 

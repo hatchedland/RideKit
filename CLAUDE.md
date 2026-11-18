@@ -5,7 +5,7 @@ Android port (planned 2026-11-18): [PLAN-ANDROID.md](PLAN-ANDROID.md).
 Setup and release checklist: [README.md](README.md).
 
 **Repo layout (2026-11-18):** `ios/` (the iOS app, its tests, widget, `Shared`, `Packages/RideKit`,
-`project.yml`, `Config`), `android/` (coming in Phase 1), and at the root `supabase/` (the CLI expects it
+`project.yml`, `Config`), `android/` (Gradle; `ridekit` = the Kotlin twin of RideKit, app module next), and at the root `supabase/` (the CLI expects it
 there), `spec/` (formats + golden files both apps test against), `design/` and `scripts/`. **iOS paths
 below (`RideTracker/…`, `Shared/…`, `Packages/RideKit`, `Config/…`) are relative to `ios/`.**
 
@@ -218,6 +218,7 @@ below (`RideTracker/…`, `Shared/…`, `Packages/RideKit`, `Config/…`) are re
 ```sh
 ./scripts/test.sh                       # RideKit unit tests (works with only Command Line Tools)
 ./scripts/test-functions.sh             # Edge Functions' shared logic vs spec/fixtures (Node 23+)
+./scripts/test-android.sh               # Kotlin RideKit (android/ridekit) vs spec/fixtures (JDK 21+)
 (cd ios && xcodegen generate)           # regenerate the Xcode project after editing ios/project.yml
 xcodebuild -project ios/RideTracker.xcodeproj -scheme RideTracker -destination 'platform=iOS Simulator,name=iPhone 17' test   # needs Xcode
 ./scripts/run-on-iphone.sh              # free Personal build (no iCloud) → USB iPhone
